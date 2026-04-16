@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "XRmxcyGf4dbILt95cztz7"
+uri = "file://artifacts/clip-app/assets/images/icon.png"
+type = "image"
+title = "clip app icon amber dark"

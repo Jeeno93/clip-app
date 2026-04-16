@@ -1,0 +1,246 @@
+import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
+import React, { useMemo, useState } from "react";
+import {
+  Alert,
+  FlatList,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { useColors } from "@/hooks/useColors";
+import ClipCard from "../../src/components/ClipCard";
+import { useClips } from "../../src/context/ClipsContext";
+
+export default function ArchiveScreen() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const { clips, allTags, removeClip } = useClips();
+  const [search, setSearch] = useState("");
+  const [activeTag, setActiveTag] = useState<string | null>(null);
+
+  const topPad = Platform.OS === "web" ? insets.top + 67 : insets.top;
+
+  const filtered = useMemo(() => {
+    let result = clips;
+    if (activeTag) {
+      result = result.filter((c) => c.tags.includes(activeTag));
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        (c) =>
+          c.text.toLowerCase().includes(q) ||
+          c.tags.some((t) => t.toLowerCase().includes(q))
+      );
+    }
+    return result;
+  }, [clips, search, activeTag]);
+
+  const handleDelete = (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    Alert.alert(
+      "Удалить цитату?",
+      "Это действие нельзя отменить.",
+      [
+        { text: "Отмена", style: "cancel" },
+        {
+          text: "Удалить",
+          style: "destructive",
+          onPress: () => removeClip(id),
+        },
+      ]
+    );
+  };
+
+  const s = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      paddingTop: topPad + 16,
+      paddingHorizontal: 20,
+      paddingBottom: 16,
+      gap: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    titleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    title: {
+      fontSize: 22,
+      fontFamily: "Inter_700Bold",
+      color: colors.foreground,
+    },
+    count: {
+      fontSize: 13,
+      fontFamily: "Inter_400Regular",
+      color: colors.textSecondary,
+    },
+    searchRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.bgInput,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 12,
+      height: 42,
+      gap: 10,
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: 14,
+      fontFamily: "Inter_400Regular",
+      color: colors.foreground,
+    },
+    tagsScroll: {
+      marginTop: 4,
+    },
+    tagsContent: {
+      gap: 8,
+      paddingRight: 4,
+    },
+    tagChip: {
+      paddingHorizontal: 14,
+      paddingVertical: 7,
+      borderRadius: 20,
+      borderWidth: 1,
+    },
+    tagText: {
+      fontSize: 13,
+      fontFamily: "Inter_400Regular",
+    },
+    listContent: {
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      paddingBottom: (Platform.OS === "web" ? 34 : insets.bottom) + 20,
+    },
+    emptyContainer: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 12,
+      paddingHorizontal: 40,
+    },
+    emptyText: {
+      fontSize: 16,
+      fontFamily: "Inter_400Regular",
+      color: colors.textSecondary,
+      textAlign: "center",
+    },
+  });
+
+  const tags = ["Все", ...allTags];
+
+  return (
+    <View style={s.container}>
+      <View style={s.header}>
+        <View style={s.titleRow}>
+          <Text style={s.title}>Архив</Text>
+          <Text style={s.count}>{clips.length} цитат</Text>
+        </View>
+        <View style={s.searchRow}>
+          <Feather name="search" size={16} color={colors.textMuted} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Поиск по тексту или тегу..."
+            placeholderTextColor={colors.textMuted}
+            style={s.searchInput}
+            clearButtonMode="while-editing"
+          />
+          {search.length > 0 && Platform.OS !== "ios" && (
+            <TouchableOpacity onPress={() => setSearch("")}>
+              <Feather name="x" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+        {allTags.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={s.tagsScroll}
+            contentContainerStyle={s.tagsContent}
+          >
+            {tags.map((tag) => {
+              const isActive =
+                tag === "Все" ? activeTag === null : activeTag === tag;
+              return (
+                <TouchableOpacity
+                  key={tag}
+                  onPress={() =>
+                    setActiveTag(tag === "Все" ? null : tag)
+                  }
+                  style={[
+                    s.tagChip,
+                    {
+                      backgroundColor: isActive
+                        ? colors.accent
+                        : colors.bgCard,
+                      borderColor: isActive
+                        ? colors.accent
+                        : colors.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      s.tagText,
+                      {
+                        color: isActive
+                          ? colors.primaryForeground
+                          : colors.textSecondary,
+                      },
+                    ]}
+                  >
+                    {tag === "Все" ? tag : `#${tag}`}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
+      </View>
+
+      {filtered.length === 0 ? (
+        <View style={s.emptyContainer}>
+          <Feather name="inbox" size={36} color={colors.textMuted} />
+          <Text style={s.emptyText}>
+            {clips.length === 0
+              ? "Архив пуст. Начни сохранять цитаты!"
+              : "Ничего не найдено"}
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <ClipCard
+              clip={item}
+              onPress={() =>
+                router.push({ pathname: "/clip/[id]", params: { id: item.id } })
+              }
+              onLongPress={() => handleDelete(item.id)}
+              compact
+            />
+          )}
+          contentContainerStyle={s.listContent}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+    </View>
+  );
+}

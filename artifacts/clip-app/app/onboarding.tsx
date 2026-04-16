@@ -1,0 +1,396 @@
+import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
+import React, { useState } from "react";
+import {
+  ActivityIndicator,
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { useColors } from "@/hooks/useColors";
+import { requestNotificationPermission, scheduleDailyDigest } from "../src/notifications/digest";
+import { saveClip, saveSettings } from "../src/storage/clips";
+
+export default function OnboardingScreen() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const [step, setStep] = useState(0);
+  const [firstQuote, setFirstQuote] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const steps = [
+    "Первая цитата",
+    "Как добавлять",
+    "Уведомления",
+  ];
+
+  const handleStep1Continue = async () => {
+    if (firstQuote.trim()) {
+      setSaving(true);
+      try {
+        await saveClip({
+          text: firstQuote.trim(),
+          tags: [],
+          source: "manual",
+          imageUri: null,
+        });
+      } catch {}
+      setSaving(false);
+    }
+    setStep(1);
+  };
+
+  const handleStep1Skip = () => {
+    setStep(1);
+  };
+
+  const handleStep2Continue = () => {
+    setStep(2);
+  };
+
+  const handleNotifChoice = async (hour: number | null) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (hour !== null) {
+      const granted = await requestNotificationPermission();
+      if (granted) {
+        await scheduleDailyDigest(hour);
+      }
+    }
+    await saveSettings({ notificationHour: hour, onboardingDone: true });
+    router.replace("/(tabs)");
+  };
+
+  const s = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    inner: {
+      flex: 1,
+      paddingHorizontal: 24,
+      paddingTop: insets.top + 40,
+      paddingBottom: insets.bottom + 24,
+    },
+    progress: {
+      flexDirection: "row",
+      gap: 6,
+      marginBottom: 40,
+    },
+    dot: {
+      flex: 1,
+      height: 2,
+      borderRadius: 2,
+    },
+    headline: {
+      fontSize: 28,
+      fontFamily: "Inter_700Bold",
+      color: colors.foreground,
+      marginBottom: 12,
+      lineHeight: 36,
+    },
+    subtitle: {
+      fontSize: 15,
+      fontFamily: "Inter_400Regular",
+      color: colors.textSecondary,
+      lineHeight: 22,
+      marginBottom: 32,
+    },
+    input: {
+      backgroundColor: colors.bgInput,
+      borderColor: colors.border,
+      borderWidth: 1,
+      borderRadius: 12,
+      padding: 16,
+      fontSize: 16,
+      fontFamily: "Inter_400Regular",
+      color: colors.foreground,
+      minHeight: 120,
+      textAlignVertical: "top",
+    },
+    btnPrimary: {
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      paddingVertical: 15,
+      alignItems: "center",
+      marginTop: 16,
+    },
+    btnPrimaryText: {
+      color: colors.primaryForeground,
+      fontSize: 16,
+      fontFamily: "Inter_600SemiBold",
+    },
+    btnSecondary: {
+      paddingVertical: 14,
+      alignItems: "center",
+      marginTop: 8,
+    },
+    btnSecondaryText: {
+      color: colors.textSecondary,
+      fontSize: 14,
+      fontFamily: "Inter_400Regular",
+    },
+    illustrationBox: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 24,
+      marginBottom: 32,
+      alignItems: "center",
+      gap: 16,
+    },
+    illustrationText: {
+      color: colors.textSecondary,
+      fontSize: 14,
+      fontFamily: "Inter_400Regular",
+      textAlign: "center",
+      lineHeight: 20,
+    },
+    illustrationStep: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      alignSelf: "stretch",
+    },
+    illustrationStepNum: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: colors.accentSubtle,
+      borderWidth: 1,
+      borderColor: colors.accentDim,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    illustrationStepNumText: {
+      color: colors.accent,
+      fontSize: 13,
+      fontFamily: "Inter_600SemiBold",
+    },
+    illustrationStepText: {
+      color: colors.foreground,
+      fontSize: 14,
+      fontFamily: "Inter_400Regular",
+      flex: 1,
+    },
+    notifGrid: {
+      gap: 12,
+      marginBottom: 24,
+    },
+    notifBtn: {
+      borderRadius: 14,
+      borderWidth: 1,
+      paddingVertical: 18,
+      paddingHorizontal: 20,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 14,
+    },
+    notifBtnText: {
+      fontSize: 16,
+      fontFamily: "Inter_500Medium",
+    },
+    notifBtnSub: {
+      fontSize: 12,
+      fontFamily: "Inter_400Regular",
+      marginTop: 2,
+    },
+  });
+
+  return (
+    <KeyboardAvoidingView
+      style={s.container}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView
+        style={s.container}
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={s.inner}>
+          <View style={s.progress}>
+            {steps.map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  s.dot,
+                  {
+                    backgroundColor:
+                      i <= step ? colors.accent : colors.border,
+                  },
+                ]}
+              />
+            ))}
+          </View>
+
+          {step === 0 && (
+            <>
+              <Text style={s.headline}>
+                Сохраняй лучшее.{"\n"}Вспоминай каждый день.
+              </Text>
+              <Text style={s.subtitle}>
+                Начни с первой цитаты — той, которую хочется перечитывать.
+              </Text>
+              <TextInput
+                value={firstQuote}
+                onChangeText={setFirstQuote}
+                placeholder="Введи цитату или мысль..."
+                placeholderTextColor={colors.textMuted}
+                style={s.input}
+                multiline
+                autoFocus
+              />
+              <TouchableOpacity
+                style={[
+                  s.btnPrimary,
+                  !firstQuote.trim() && { opacity: 0.6 },
+                ]}
+                onPress={handleStep1Continue}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color={colors.primaryForeground} />
+                ) : (
+                  <Text style={s.btnPrimaryText}>Сохранить и продолжить</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={s.btnSecondary}
+                onPress={handleStep1Skip}
+              >
+                <Text style={s.btnSecondaryText}>Позже</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {step === 1 && (
+            <>
+              <Text style={s.headline}>
+                Добавляй из{"\n"}любого приложения
+              </Text>
+              <Text style={s.subtitle}>
+                Выдели текст в Telegram, браузере или любом другом приложении и поделись им в Clip.
+              </Text>
+              <View style={s.illustrationBox}>
+                {[
+                  "Выдели текст в любом приложении",
+                  'Нажми "Поделиться"',
+                  "Выбери Clip из списка",
+                ].map((text, i) => (
+                  <View key={i} style={s.illustrationStep}>
+                    <View style={s.illustrationStepNum}>
+                      <Text style={s.illustrationStepNumText}>{i + 1}</Text>
+                    </View>
+                    <Text style={s.illustrationStepText}>{text}</Text>
+                    {i < 2 && (
+                      <Feather
+                        name="arrow-down"
+                        size={14}
+                        color={colors.textMuted}
+                      />
+                    )}
+                  </View>
+                ))}
+              </View>
+              <TouchableOpacity
+                style={s.btnPrimary}
+                onPress={handleStep2Continue}
+              >
+                <Text style={s.btnPrimaryText}>Понял, продолжить</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {step === 2 && (
+            <>
+              <Text style={s.headline}>
+                Когда присылать{"\n"}твои цитаты?
+              </Text>
+              <Text style={s.subtitle}>
+                Каждый день Clip будет напоминать тебе о сохранённом.
+              </Text>
+              <View style={s.notifGrid}>
+                <TouchableOpacity
+                  style={[
+                    s.notifBtn,
+                    {
+                      backgroundColor: colors.accentSubtle,
+                      borderColor: colors.accentDim,
+                    },
+                  ]}
+                  onPress={() => handleNotifChoice(8)}
+                >
+                  <Feather name="sunrise" size={22} color={colors.accent} />
+                  <View>
+                    <Text
+                      style={[s.notifBtnText, { color: colors.foreground }]}
+                    >
+                      Утром
+                    </Text>
+                    <Text
+                      style={[s.notifBtnSub, { color: colors.textSecondary }]}
+                    >
+                      8:00
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    s.notifBtn,
+                    {
+                      backgroundColor: colors.accentSubtle,
+                      borderColor: colors.accentDim,
+                    },
+                  ]}
+                  onPress={() => handleNotifChoice(20)}
+                >
+                  <Feather name="moon" size={22} color={colors.accent} />
+                  <View>
+                    <Text
+                      style={[s.notifBtnText, { color: colors.foreground }]}
+                    >
+                      Вечером
+                    </Text>
+                    <Text
+                      style={[s.notifBtnSub, { color: colors.textSecondary }]}
+                    >
+                      20:00
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    s.notifBtn,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  onPress={() => handleNotifChoice(null)}
+                >
+                  <Feather name="bell-off" size={22} color={colors.textSecondary} />
+                  <View>
+                    <Text
+                      style={[s.notifBtnText, { color: colors.textSecondary }]}
+                    >
+                      Не сейчас
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
