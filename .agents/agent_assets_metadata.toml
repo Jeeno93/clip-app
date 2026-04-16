@@ -1,8 +1,13 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "XRmxcyGf4dbILt95cztz7"
 uri = "file://artifacts/clip-app/assets/images/icon.png"
 type = "image"
 title = "clip app icon amber dark"
+
+[[outputs]]
+id = "IWBO0H3tV7nwQyeoITbcN"
+uri = "file://CLIP_DOCUMENTATION.md"
+type = "text"
+title = "Clip — Документация"
