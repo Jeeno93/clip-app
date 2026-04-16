@@ -303,9 +303,78 @@ Tab bar поддерживает NativeTabs с Liquid Glass на iOS 26+ и кл
 
 ---
 
+## Share Intent
+
+Приложение поддерживает захват текста из других приложений через нативный механизм Share.
+
+### Как это работает
+
+Пользователь выделяет текст в Telegram, браузере или любом другом приложении, нажимает «Поделиться» и выбирает Clip — приложение открывается с предзаполненным текстом на экране добавления.
+
+### Реализация
+
+| Файл | Роль |
+|---|---|
+| `package.json` | `expo-share-intent@5.1.1` — совместима с Expo SDK 54 |
+| `app.json` | Плагин `expo-share-intent` с фильтрами для текста и URL |
+| `app/_layout.tsx` | `ShareIntentProvider` оборачивает дерево навигации; компонент `ShareIntentHandler` следит за входящими интентами |
+
+### Конфигурация плагина (`app.json`)
+
+```json
+[
+  "expo-share-intent",
+  {
+    "iosActivationRules": {
+      "NSExtensionActivationSupportsText": true,
+      "NSExtensionActivationSupportsWebURLWithMaxCount": 1
+    },
+    "androidIntentFilters": ["text/*"]
+  }
+]
+```
+
+- **iOS** — поддерживает текст (`NSExtensionActivationSupportsText`) и веб-URL (лимит 1)
+- **Android** — фильтр `text/*` захватывает любой текстовый контент
+
+### Логика `ShareIntentHandler`
+
+```tsx
+// Внутри провайдера, следит за hasShareIntent
+const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntentContext();
+
+useEffect(() => {
+  if (!hasShareIntent) return;
+  const text = shareIntent?.text ?? shareIntent?.webUrl ?? null;
+  if (!text) return;
+
+  router.push({
+    pathname: "/add",
+    params: {
+      sharedText: text,
+      source: shareIntent?.meta?.title ?? "share",
+    },
+  });
+  resetShareIntent(); // очищает интент после навигации
+}, [hasShareIntent, shareIntent]);
+```
+
+- `shareIntent.text` — выделенный текст
+- `shareIntent.webUrl` — URL если поделились ссылкой
+- `shareIntent.meta?.title` — название приложения-источника (например, «Telegram»)
+- После навигации `resetShareIntent()` сбрасывает состояние
+
+### Ограничения
+
+- **Expo Go / Web**: Share Intent отключается автоматически через `disabled: Platform.OS === 'web'`. Функция доступна только в нативной production-сборке.
+- Для тестирования на симуляторе нужен `expo prebuild` + `expo run:android` / `expo run:ios`.
+- В production-сборке для iOS используется Replit Expo Launch (App Store).
+
+---
+
 ## Ограничения MVP
 
-- Share Intent (захват текста из других приложений) требует нативной сборки — в Expo Go недоступен
+- Share Intent требует нативной сборки — в Expo Go и web-preview недоступен (отключён автоматически)
 - Push-уведомления работают только на реальном устройстве (не в Expo Go на web)
 - Только тёмная тема — светлого режима нет
 - Лимит 100 цитат в бесплатной версии

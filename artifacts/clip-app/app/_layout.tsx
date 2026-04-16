@@ -5,9 +5,11 @@ import {
   Inter_700Bold,
   useFonts,
 } from "@expo-google-fonts/inter";
-import { Stack } from "expo-router";
+import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import { ShareIntentProvider, useShareIntentContext } from "expo-share-intent";
+import React, { useEffect, useRef } from "react";
+import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -15,7 +17,6 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ClipsProvider } from "../src/context/ClipsContext";
 import { getSettings } from "../src/storage/clips";
-import { router } from "expo-router";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -28,31 +29,74 @@ async function checkOnboarding() {
   } catch {}
 }
 
+/**
+ * Watches for incoming Share Intents and navigates to AddClipScreen.
+ * Must be inside ShareIntentProvider.
+ */
+function ShareIntentHandler() {
+  const { hasShareIntent, shareIntent, resetShareIntent } =
+    useShareIntentContext();
+  const handledRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!hasShareIntent) return;
+
+    const text = shareIntent?.text ?? shareIntent?.webUrl ?? null;
+    if (!text) return;
+
+    // Avoid double-navigation for the same intent
+    if (handledRef.current === text) return;
+    handledRef.current = text;
+
+    const source =
+      shareIntent?.meta?.title ??
+      (shareIntent?.webUrl ? "weburl" : "share");
+
+    router.push({
+      pathname: "/add",
+      params: { sharedText: text, source },
+    });
+
+    // Reset after navigation so the next share opens fresh
+    resetShareIntent();
+  }, [hasShareIntent, shareIntent, resetShareIntent]);
+
+  return null;
+}
+
 function RootLayoutNav() {
   useEffect(() => {
     checkOnboarding();
   }, []);
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="onboarding" options={{ headerShown: false, animation: "none" }} />
-      <Stack.Screen
-        name="add"
-        options={{
-          headerShown: false,
-          presentation: "modal",
-          animation: "slide_from_bottom",
-        }}
-      />
-      <Stack.Screen
-        name="clip/[id]"
-        options={{
-          headerShown: false,
-          animation: "slide_from_right",
-        }}
-      />
-    </Stack>
+    <>
+      {/* Handles share intent navigation — renders nothing visually */}
+      <ShareIntentHandler />
+
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="onboarding"
+          options={{ headerShown: false, animation: "none" }}
+        />
+        <Stack.Screen
+          name="add"
+          options={{
+            headerShown: false,
+            presentation: "modal",
+            animation: "slide_from_bottom",
+          }}
+        />
+        <Stack.Screen
+          name="clip/[id]"
+          options={{
+            headerShown: false,
+            animation: "slide_from_right",
+          }}
+        />
+      </Stack>
+    </>
   );
 }
 
@@ -77,9 +121,18 @@ export default function RootLayout() {
       <ErrorBoundary>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <KeyboardProvider>
-            <ClipsProvider>
-              <RootLayoutNav />
-            </ClipsProvider>
+            {/*
+             * ShareIntentProvider must wrap the navigation tree.
+             * On web it is disabled automatically since the native
+             * module is not available there.
+             */}
+            <ShareIntentProvider
+              options={{ disabled: Platform.OS === "web" }}
+            >
+              <ClipsProvider>
+                <RootLayoutNav />
+              </ClipsProvider>
+            </ShareIntentProvider>
           </KeyboardProvider>
         </GestureHandlerRootView>
       </ErrorBoundary>
