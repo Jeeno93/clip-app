@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Platform,
@@ -9,6 +9,7 @@ import {
   Share,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -31,15 +32,33 @@ export default function ClipDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { clips, allTags, removeClip, editClipTags } = useClips();
+  const { clips, allTags, removeClip, editClipTags, editClipText } = useClips();
 
   const clip = useMemo(() => clips.find((c) => c.id === id), [clips, id]);
+
+  // Tags editing state
   const [editingTags, setEditingTags] = useState(false);
   const [editedTags, setEditedTags] = useState<string[]>([]);
 
+  // Text editing state
+  const [editingText, setEditingText] = useState(false);
+  const [editedText, setEditedText] = useState("");
+  const [savingText, setSavingText] = useState(false);
+  const textInputRef = useRef<TextInput>(null);
+
   useEffect(() => {
-    if (clip) setEditedTags(clip.tags);
+    if (clip) {
+      setEditedTags(clip.tags);
+      setEditedText(clip.text);
+    }
   }, [clip]);
+
+  // Focus input when entering text edit mode
+  useEffect(() => {
+    if (editingText) {
+      setTimeout(() => textInputRef.current?.focus(), 80);
+    }
+  }, [editingText]);
 
   const topPad = Platform.OS === "web" ? insets.top + 67 : insets.top;
 
@@ -81,6 +100,31 @@ export default function ClipDetailScreen() {
     setEditingTags(false);
   };
 
+  const handleSaveText = async () => {
+    const trimmed = editedText.trim();
+    if (!trimmed) {
+      Alert.alert("Пустой текст", "Текст цитаты не может быть пустым.");
+      return;
+    }
+    if (trimmed === clip.text) {
+      setEditingText(false);
+      return;
+    }
+    setSavingText(true);
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await editClipText(clip.id, trimmed);
+      setEditingText(false);
+    } finally {
+      setSavingText(false);
+    }
+  };
+
+  const handleCancelTextEdit = () => {
+    setEditedText(clip.text);
+    setEditingText(false);
+  };
+
   const s = StyleSheet.create({
     container: {
       flex: 1,
@@ -106,18 +150,79 @@ export default function ClipDetailScreen() {
       gap: 24,
       paddingBottom: (Platform.OS === "web" ? 34 : insets.bottom) + 24,
     },
+    quoteSection: {
+      gap: 0,
+    },
+    quoteSectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 16,
+    },
     accentBar: {
       width: 3,
       height: 28,
       backgroundColor: colors.accent,
       borderRadius: 2,
-      marginBottom: 20,
+    },
+    editTextBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingVertical: 4,
+      paddingHorizontal: 10,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    editTextBtnText: {
+      fontSize: 12,
+      fontFamily: "Inter_400Regular",
+      color: colors.textSecondary,
     },
     quoteText: {
       fontSize: 20,
       fontFamily: "Inter_400Regular",
       color: colors.foreground,
       lineHeight: 32,
+    },
+    textInput: {
+      fontSize: 20,
+      fontFamily: "Inter_400Regular",
+      color: colors.foreground,
+      lineHeight: 32,
+      borderWidth: 1,
+      borderColor: colors.accent,
+      borderRadius: 10,
+      padding: 14,
+      minHeight: 100,
+      textAlignVertical: "top",
+      backgroundColor: colors.bgInput,
+    },
+    saveTextBtn: {
+      backgroundColor: colors.primary,
+      borderRadius: 10,
+      paddingVertical: 13,
+      alignItems: "center",
+      marginTop: 12,
+    },
+    saveTextBtnText: {
+      color: colors.primaryForeground,
+      fontSize: 15,
+      fontFamily: "Inter_600SemiBold",
+    },
+    cancelTextBtn: {
+      borderRadius: 10,
+      paddingVertical: 11,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginTop: 8,
+    },
+    cancelTextBtnText: {
+      color: colors.textSecondary,
+      fontSize: 14,
+      fontFamily: "Inter_400Regular",
     },
     metaSection: {
       gap: 10,
@@ -241,10 +346,54 @@ export default function ClipDetailScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={s.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
-        <View>
-          <View style={s.accentBar} />
-          <Text style={s.quoteText}>{clip.text}</Text>
+        {/* ── Text section ── */}
+        <View style={s.quoteSection}>
+          <View style={s.quoteSectionHeader}>
+            <View style={s.accentBar} />
+            <TouchableOpacity
+              style={s.editTextBtn}
+              onPress={() =>
+                editingText ? handleCancelTextEdit() : setEditingText(true)
+              }
+            >
+              <Feather
+                name={editingText ? "x" : "edit-2"}
+                size={12}
+                color={colors.textSecondary}
+              />
+              <Text style={s.editTextBtnText}>
+                {editingText ? "Отмена" : "Редактировать"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {editingText ? (
+            <>
+              <TextInput
+                ref={textInputRef}
+                style={s.textInput}
+                value={editedText}
+                onChangeText={setEditedText}
+                multiline
+                scrollEnabled={false}
+                autoCorrect={false}
+                placeholderTextColor={colors.textMuted}
+              />
+              <TouchableOpacity
+                style={[s.saveTextBtn, savingText && { opacity: 0.6 }]}
+                onPress={handleSaveText}
+                disabled={savingText}
+              >
+                <Text style={s.saveTextBtnText}>
+                  {savingText ? "Сохраняю…" : "Сохранить"}
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <Text style={s.quoteText}>{clip.text}</Text>
+          )}
         </View>
 
         <View style={s.divider} />
@@ -264,6 +413,7 @@ export default function ClipDetailScreen() {
 
         <View style={s.divider} />
 
+        {/* ── Tags section ── */}
         <View style={s.tagsSection}>
           <View style={s.tagsSectionHeader}>
             <Text style={s.tagsSectionTitle}>Теги</Text>
