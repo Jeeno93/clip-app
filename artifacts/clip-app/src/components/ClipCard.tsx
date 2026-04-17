@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -54,12 +55,21 @@ export default function ClipCard({
         style={[styles.accentBar, { backgroundColor: colors.primary }]}
       />
       <View style={styles.content}>
-        <Text
-          style={[styles.text, { color: colors.foreground }]}
-          numberOfLines={compact ? 4 : undefined}
-        >
-          {clip.text}
-        </Text>
+        {clip.imageUri ? (
+          <Image
+            source={{ uri: clip.imageUri }}
+            style={styles.image}
+            resizeMode="cover"
+          />
+        ) : null}
+        {clip.text ? (
+          <Text
+            style={[styles.text, { color: colors.foreground }]}
+            numberOfLines={compact ? 4 : undefined}
+          >
+            {clip.text}
+          </Text>
+        ) : null}
         <View style={styles.meta}>
           <Text style={[styles.metaText, { color: colors.textSecondary }]}>
             {sourceLabel(clip.source)} · {formatDate(clip.createdAt)}
@@ -113,6 +123,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     fontFamily: "Inter_400Regular",
+  },
+  image: {
+    width: "100%",
+    height: 120,
+    borderRadius: 6,
   },
   meta: {
     flexDirection: "row",

@@ -29,7 +29,8 @@ interface ClipsContextType {
   addClip: (
     text: string,
     tags: string[],
-    source: string
+    source: string,
+    imageUri?: string | null
   ) => Promise<Clip | null>;
   removeClip: (id: string) => Promise<void>;
   editClipTags: (id: string, tags: string[]) => Promise<void>;
@@ -74,10 +75,11 @@ export function ClipsProvider({ children }: { children: React.ReactNode }) {
     async (
       text: string,
       tags: string[],
-      source: string
+      source: string,
+      imageUri: string | null = null
     ): Promise<Clip | null> => {
       if (clips.length >= FREE_LIMIT) return null;
-      const clip = await saveClip({ text, tags, source, imageUri: null });
+      const clip = await saveClip({ text, tags, source, imageUri });
       await loadAll();
       return clip;
     },

@@ -11,7 +11,7 @@ export const FREE_LIMIT = 100;
 export interface Clip {
   id: string;
   text: string;
-  imageUri: null;
+  imageUri: string | null;
   source: string;
   tags: string[];
   createdAt: string;

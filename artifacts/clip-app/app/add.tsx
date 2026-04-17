@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -23,8 +24,15 @@ import { FREE_LIMIT } from "../src/storage/clips";
 export default function AddClipScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ sharedText?: string; source?: string }>();
+  const params = useLocalSearchParams<{
+    sharedText?: string;
+    source?: string;
+    imageUri?: string;
+  }>();
   const { clips, allTags, addClip, reachedLimit } = useClips();
+
+  const imageUri = params.imageUri ?? null;
+  const hasImage = !!imageUri;
 
   const [text, setText] = useState(params.sharedText ?? "");
   const [tags, setTags] = useState<string[]>([]);
@@ -33,14 +41,18 @@ export default function AddClipScreen() {
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
+    // Don't autofocus when an image is shared — comment is optional
+    if (hasImage) return;
     const t = setTimeout(() => inputRef.current?.focus(), 200);
     return () => clearTimeout(t);
-  }, []);
+  }, [hasImage]);
 
-  const source = params.source ?? "manual";
+  const source = hasImage ? "screenshot" : (params.source ?? "manual");
+
+  const canSave = hasImage || text.trim().length > 0;
 
   const handleSave = async () => {
-    if (!text.trim()) return;
+    if (!canSave) return;
     if (reachedLimit) {
       Alert.alert(
         "Лимит достигнут",
@@ -50,7 +62,7 @@ export default function AddClipScreen() {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSaving(true);
-    const clip = await addClip(text.trim(), tags, source);
+    const clip = await addClip(text.trim(), tags, source, imageUri);
     setSaving(false);
     if (clip) {
       router.back();
@@ -122,6 +134,15 @@ export default function AddClipScreen() {
       textAlignVertical: "top",
       lineHeight: 24,
     },
+    textInputCompact: {
+      minHeight: 80,
+    },
+    imagePreview: {
+      width: "100%",
+      height: 200,
+      borderRadius: 8,
+      backgroundColor: colors.bgInput,
+    },
     sourceBadge: {
       flexDirection: "row",
       alignItems: "center",
@@ -165,10 +186,10 @@ export default function AddClipScreen() {
         <TouchableOpacity
           style={[
             s.saveBtn,
-            (!text.trim() || reachedLimit || saving) && { opacity: 0.5 },
+            (!canSave || reachedLimit || saving) && { opacity: 0.5 },
           ]}
           onPress={handleSave}
-          disabled={!text.trim() || reachedLimit || saving}
+          disabled={!canSave || reachedLimit || saving}
         >
           {saving ? (
             <ActivityIndicator color={colors.primaryForeground} size="small" />
@@ -192,15 +213,30 @@ export default function AddClipScreen() {
           </View>
         )}
 
+        {hasImage && (
+          <View>
+            <Text style={s.label}>Изображение</Text>
+            <Image
+              source={{ uri: imageUri! }}
+              style={s.imagePreview}
+              resizeMode="cover"
+            />
+          </View>
+        )}
+
         <View>
-          <Text style={s.label}>Цитата</Text>
+          <Text style={s.label}>{hasImage ? "Комментарий" : "Цитата"}</Text>
           <TextInput
             ref={inputRef}
             value={text}
             onChangeText={setText}
-            placeholder="Введи текст цитаты или мысли..."
+            placeholder={
+              hasImage
+                ? "Добавь комментарий..."
+                : "Введи текст цитаты или мысли..."
+            }
             placeholderTextColor={colors.textMuted}
-            style={s.textInput}
+            style={[s.textInput, hasImage && s.textInputCompact]}
             multiline
             editable={!reachedLimit}
           />

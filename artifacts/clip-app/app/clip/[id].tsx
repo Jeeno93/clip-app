@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Image,
   Platform,
   ScrollView,
   Share,
@@ -186,6 +187,20 @@ export default function ClipDetailScreen() {
       color: colors.foreground,
       lineHeight: 32,
     },
+    fullImage: {
+      width: "100%",
+      maxHeight: 400,
+      aspectRatio: 1,
+      borderRadius: 10,
+      backgroundColor: colors.bgInput,
+      marginBottom: 16,
+    },
+    commentText: {
+      fontSize: 16,
+      fontFamily: "Inter_400Regular",
+      color: colors.foreground,
+      lineHeight: 24,
+    },
     textInput: {
       fontSize: 20,
       fontFamily: "Inter_400Regular",
@@ -348,53 +363,66 @@ export default function ClipDetailScreen() {
         contentContainerStyle={s.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {/* ── Text section ── */}
-        <View style={s.quoteSection}>
-          <View style={s.quoteSectionHeader}>
-            <View style={s.accentBar} />
-            <TouchableOpacity
-              style={s.editTextBtn}
-              onPress={() =>
-                editingText ? handleCancelTextEdit() : setEditingText(true)
-              }
-            >
-              <Feather
-                name={editingText ? "x" : "edit-2"}
-                size={12}
-                color={colors.textSecondary}
-              />
-              <Text style={s.editTextBtnText}>
-                {editingText ? "Отмена" : "Редактировать"}
-              </Text>
-            </TouchableOpacity>
-          </View>
+        {/* ── Image (if present) ── */}
+        {clip.imageUri && (
+          <Image
+            source={{ uri: clip.imageUri }}
+            style={s.fullImage}
+            resizeMode="contain"
+          />
+        )}
 
-          {editingText ? (
-            <>
-              <TextInput
-                ref={textInputRef}
-                style={s.textInput}
-                value={editedText}
-                onChangeText={setEditedText}
-                multiline
-                scrollEnabled={false}
-                autoCorrect={false}
-                placeholderTextColor={colors.textMuted}
-              />
+        {/* ── Text / comment section ── */}
+        {(clip.text || !clip.imageUri || editingText) && (
+          <View style={s.quoteSection}>
+            <View style={s.quoteSectionHeader}>
+              <View style={s.accentBar} />
               <TouchableOpacity
-                style={[s.saveTextBtn, savingText && { opacity: 0.6 }]}
-                onPress={handleSaveText}
-                disabled={savingText}
+                style={s.editTextBtn}
+                onPress={() =>
+                  editingText ? handleCancelTextEdit() : setEditingText(true)
+                }
               >
-                <Text style={s.saveTextBtnText}>
-                  {savingText ? "Сохраняю…" : "Сохранить"}
+                <Feather
+                  name={editingText ? "x" : "edit-2"}
+                  size={12}
+                  color={colors.textSecondary}
+                />
+                <Text style={s.editTextBtnText}>
+                  {editingText ? "Отмена" : "Редактировать"}
                 </Text>
               </TouchableOpacity>
-            </>
-          ) : (
-            <Text style={s.quoteText}>{clip.text}</Text>
-          )}
-        </View>
+            </View>
+
+            {editingText ? (
+              <>
+                <TextInput
+                  ref={textInputRef}
+                  style={s.textInput}
+                  value={editedText}
+                  onChangeText={setEditedText}
+                  multiline
+                  scrollEnabled={false}
+                  autoCorrect={false}
+                  placeholderTextColor={colors.textMuted}
+                />
+                <TouchableOpacity
+                  style={[s.saveTextBtn, savingText && { opacity: 0.6 }]}
+                  onPress={handleSaveText}
+                  disabled={savingText}
+                >
+                  <Text style={s.saveTextBtnText}>
+                    {savingText ? "Сохраняю…" : "Сохранить"}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <Text style={clip.imageUri ? s.commentText : s.quoteText}>
+                {clip.text}
+              </Text>
+            )}
+          </View>
+        )}
 
         <View style={s.divider} />
 

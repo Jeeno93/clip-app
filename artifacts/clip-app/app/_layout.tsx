@@ -42,21 +42,30 @@ function ShareIntentHandler() {
   useEffect(() => {
     if (!hasShareIntent) return;
 
+    const imageUri = shareIntent?.files?.[0]?.path ?? null;
     const text = shareIntent?.text ?? shareIntent?.webUrl ?? null;
-    if (!text) return;
 
-    // Avoid double-navigation for the same intent
-    if (handledRef.current === text) return;
-    handledRef.current = text;
+    // Build a stable de-dup key for this intent
+    const key = imageUri ?? text;
+    if (!key) return;
+    if (handledRef.current === key) return;
+    handledRef.current = key;
 
-    const source =
-      shareIntent?.meta?.title ??
-      (shareIntent?.webUrl ? "weburl" : "share");
+    if (imageUri) {
+      router.push({
+        pathname: "/add",
+        params: { imageUri, source: "screenshot" },
+      });
+    } else if (text) {
+      const source =
+        shareIntent?.meta?.title ??
+        (shareIntent?.webUrl ? "weburl" : "share");
 
-    router.push({
-      pathname: "/add",
-      params: { sharedText: text, source },
-    });
+      router.push({
+        pathname: "/add",
+        params: { sharedText: text, source },
+      });
+    }
 
     // Reset after navigation so the next share opens fresh
     resetShareIntent();
