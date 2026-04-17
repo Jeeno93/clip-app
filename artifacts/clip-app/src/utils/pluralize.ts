@@ -31,3 +31,8 @@ export function pluralize(
 export function clipsCount(n: number): string {
   return `${n} ${pluralize(n, "цитата", "цитаты", "цитат")}`;
 }
+
+/** Shortcut: returns "1 день", "3 дня", "7 дней", etc. */
+export function daysCount(n: number): string {
+  return `${n} ${pluralize(n, "день", "дня", "дней")}`;
+}

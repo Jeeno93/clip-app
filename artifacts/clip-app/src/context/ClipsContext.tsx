@@ -8,11 +8,13 @@ import React, {
 import {
   Clip,
   FREE_LIMIT,
+  Streak,
   deleteClip,
   getAllClips,
   getAllTags,
   getDailyCards,
   getRandomClip,
+  getStreak,
   saveClip,
   updateClip,
 } from "../storage/clips";
@@ -21,6 +23,7 @@ interface ClipsContextType {
   clips: Clip[];
   dailyCards: Clip[];
   allTags: string[];
+  streak: Streak;
   loading: boolean;
   reachedLimit: boolean;
   addClip: (
@@ -42,19 +45,22 @@ export function ClipsProvider({ children }: { children: React.ReactNode }) {
   const [clips, setClips] = useState<Clip[]>([]);
   const [dailyCards, setDailyCards] = useState<Clip[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
+  const [streak, setStreak] = useState<Streak>({ count: 0, lastDate: "" });
   const [loading, setLoading] = useState(true);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [c, dc, tags] = await Promise.all([
+      const [c, dc, tags, st] = await Promise.all([
         getAllClips(),
         getDailyCards(),
         getAllTags(),
+        getStreak(),
       ]);
       setClips(c);
       setDailyCards(dc);
       setAllTags(tags);
+      setStreak(st);
     } finally {
       setLoading(false);
     }
@@ -118,6 +124,7 @@ export function ClipsProvider({ children }: { children: React.ReactNode }) {
         clips,
         dailyCards,
         allTags,
+        streak,
         loading,
         reachedLimit: clips.length >= FREE_LIMIT,
         addClip,

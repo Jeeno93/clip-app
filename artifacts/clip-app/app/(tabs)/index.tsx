@@ -19,6 +19,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
 import ClipCard from "../../src/components/ClipCard";
+import StreakBadge from "../../src/components/StreakBadge";
+import StreakModal from "../../src/components/StreakModal";
 import { useClips } from "../../src/context/ClipsContext";
 import { Clip } from "../../src/storage/clips";
 import { clipsCount } from "../../src/utils/pluralize";
@@ -36,12 +38,17 @@ function formatHeaderDate(): string {
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { clips, dailyCards, loading, reachedLimit, addClip, refresh } = useClips();
+  const { clips, dailyCards, streak, loading, reachedLimit, addClip, refresh } =
+    useClips();
   const [quickText, setQuickText] = useState("");
   const [adding, setAdding] = useState(false);
   const [surpriseClip, setSurpriseClip] = useState<Clip | null>(null);
   const [showSurprise, setShowSurprise] = useState(false);
+  const [showStreak, setShowStreak] = useState(false);
   const surpriseAnim = useRef(new Animated.Value(0)).current;
+
+  const todayStr = new Date().toDateString();
+  const streakActive = streak.lastDate === todayStr && streak.count > 0;
 
   useEffect(() => {
     refresh();
@@ -112,6 +119,9 @@ export default function HomeScreen() {
       alignItems: "center",
       justifyContent: "center",
       marginTop: -2,
+    },
+    streakRow: {
+      marginTop: 10,
     },
     dateText: {
       fontSize: 12,
@@ -336,6 +346,13 @@ export default function HomeScreen() {
                 {` ${clipsCount(clips.length).split(" ")[1]} в архиве`}
               </Text>
             )}
+            <View style={s.streakRow}>
+              <StreakBadge
+                count={streak.count}
+                active={streakActive}
+                onPress={() => setShowStreak(true)}
+              />
+            </View>
           </View>
           <TouchableOpacity
             style={s.settingsBtn}
@@ -488,6 +505,13 @@ export default function HomeScreen() {
           </Animated.View>
         </TouchableOpacity>
       </Modal>
+
+      <StreakModal
+        visible={showStreak}
+        onClose={() => setShowStreak(false)}
+        clips={clips}
+        streakCount={streak.count}
+      />
     </View>
   );
 }
