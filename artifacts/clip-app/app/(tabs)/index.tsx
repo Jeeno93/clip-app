@@ -19,11 +19,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
 import ClipCard from "../../src/components/ClipCard";
-import StreakBadge from "../../src/components/StreakBadge";
-import StreakModal from "../../src/components/StreakModal";
 import { useClips } from "../../src/context/ClipsContext";
 import { Clip } from "../../src/storage/clips";
-import { clipsCount } from "../../src/utils/pluralize";
+import { clipsCount, daysCount } from "../../src/utils/pluralize";
 
 function formatHeaderDate(): string {
   const d = new Date();
@@ -44,11 +42,17 @@ export default function HomeScreen() {
   const [adding, setAdding] = useState(false);
   const [surpriseClip, setSurpriseClip] = useState<Clip | null>(null);
   const [showSurprise, setShowSurprise] = useState(false);
-  const [showStreak, setShowStreak] = useState(false);
   const surpriseAnim = useRef(new Animated.Value(0)).current;
 
   const todayStr = new Date().toDateString();
-  const streakActive = streak.lastDate === todayStr && streak.count > 0;
+  const yesterdayStr = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toDateString();
+  })();
+  const showStreak =
+    streak.count >= 1 &&
+    (streak.lastDate === todayStr || streak.lastDate === yesterdayStr);
 
   useEffect(() => {
     refresh();
@@ -120,8 +124,18 @@ export default function HomeScreen() {
       justifyContent: "center",
       marginTop: -2,
     },
-    streakRow: {
-      marginTop: 10,
+    streakLine: {
+      marginTop: 4,
+      fontSize: 12,
+      fontFamily: "Inter_400Regular",
+      color: colors.textMuted,
+    },
+    streakFlame: {
+      fontSize: 12,
+    },
+    streakNumber: {
+      color: colors.accent,
+      fontFamily: "Inter_600SemiBold",
     },
     dateText: {
       fontSize: 12,
@@ -346,13 +360,13 @@ export default function HomeScreen() {
                 {` ${clipsCount(clips.length).split(" ")[1]} в архиве`}
               </Text>
             )}
-            <View style={s.streakRow}>
-              <StreakBadge
-                count={streak.count}
-                active={streakActive}
-                onPress={() => setShowStreak(true)}
-              />
-            </View>
+            {showStreak && (
+              <Text style={s.streakLine}>
+                <Text style={s.streakFlame}>🔥 </Text>
+                <Text style={s.streakNumber}>{streak.count}</Text>
+                {` ${daysCount(streak.count).split(" ")[1]} подряд`}
+              </Text>
+            )}
           </View>
           <TouchableOpacity
             style={s.settingsBtn}
@@ -505,13 +519,6 @@ export default function HomeScreen() {
           </Animated.View>
         </TouchableOpacity>
       </Modal>
-
-      <StreakModal
-        visible={showStreak}
-        onClose={() => setShowStreak(false)}
-        clips={clips}
-        streakCount={streak.count}
-      />
     </View>
   );
 }
