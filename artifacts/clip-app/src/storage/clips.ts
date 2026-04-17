@@ -22,9 +22,12 @@ export interface Streak {
   lastDate: string;
 }
 
+export type ThemeMode = "dark" | "light" | "system";
+
 export interface Settings {
   notificationHour: number | null;
   onboardingDone: boolean;
+  themeMode: ThemeMode;
 }
 
 function generateId(): string {
@@ -151,13 +154,19 @@ export async function getStreak(): Promise<Streak> {
   }
 }
 
+const DEFAULT_SETTINGS: Settings = {
+  notificationHour: null,
+  onboardingDone: false,
+  themeMode: "dark",
+};
+
 export async function getSettings(): Promise<Settings> {
   try {
     const raw = await AsyncStorage.getItem(SETTINGS_KEY);
-    if (!raw) return { notificationHour: null, onboardingDone: false };
-    return JSON.parse(raw);
+    if (!raw) return { ...DEFAULT_SETTINGS };
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
   } catch {
-    return { notificationHour: null, onboardingDone: false };
+    return { ...DEFAULT_SETTINGS };
   }
 }
 

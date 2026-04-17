@@ -97,6 +97,22 @@ export default function HomeScreen() {
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
     },
+    headerTopRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+    },
+    headerTextCol: {
+      flex: 1,
+    },
+    settingsBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: -2,
+    },
     dateText: {
       fontSize: 12,
       fontFamily: "Inter_400Regular",
@@ -308,16 +324,27 @@ export default function HomeScreen() {
   return (
     <View style={s.container}>
       <View style={s.header}>
-        <Text style={s.dateText}>{formatHeaderDate()}</Text>
-        <Text style={s.titleText}>
-          Сегодняшние <Text style={s.accentDot}>открытия</Text>
-        </Text>
-        {clips.length > 0 && (
-          <Text style={s.archiveCount}>
-            <Text style={s.archiveCountNumber}>{clips.length}</Text>
-            {` ${clipsCount(clips.length).split(" ")[1]} в архиве`}
-          </Text>
-        )}
+        <View style={s.headerTopRow}>
+          <View style={s.headerTextCol}>
+            <Text style={s.dateText}>{formatHeaderDate()}</Text>
+            <Text style={s.titleText}>
+              Сегодняшние <Text style={s.accentDot}>открытия</Text>
+            </Text>
+            {clips.length > 0 && (
+              <Text style={s.archiveCount}>
+                <Text style={s.archiveCountNumber}>{clips.length}</Text>
+                {` ${clipsCount(clips.length).split(" ")[1]} в архиве`}
+              </Text>
+            )}
+          </View>
+          <TouchableOpacity
+            style={s.settingsBtn}
+            onPress={() => router.push("/settings")}
+            hitSlop={8}
+          >
+            <Feather name="settings" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {isEmpty ? (

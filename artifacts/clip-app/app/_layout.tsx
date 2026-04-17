@@ -16,6 +16,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ClipsProvider } from "../src/context/ClipsContext";
+import { ThemeProvider } from "../src/context/ThemeContext";
 import { getSettings } from "../src/storage/clips";
 
 SplashScreen.preventAutoHideAsync();
@@ -95,6 +96,13 @@ function RootLayoutNav() {
             animation: "slide_from_right",
           }}
         />
+        <Stack.Screen
+          name="settings"
+          options={{
+            headerShown: false,
+            animation: "slide_from_right",
+          }}
+        />
       </Stack>
     </>
   );
@@ -129,9 +137,11 @@ export default function RootLayout() {
             <ShareIntentProvider
               options={{ disabled: Platform.OS === "web" }}
             >
-              <ClipsProvider>
-                <RootLayoutNav />
-              </ClipsProvider>
+              <ThemeProvider>
+                <ClipsProvider>
+                  <RootLayoutNav />
+                </ClipsProvider>
+              </ThemeProvider>
             </ShareIntentProvider>
           </KeyboardProvider>
         </GestureHandlerRootView>
