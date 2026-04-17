@@ -21,6 +21,7 @@ import { useColors } from "@/hooks/useColors";
 import ClipCard from "../../src/components/ClipCard";
 import { useClips } from "../../src/context/ClipsContext";
 import { Clip } from "../../src/storage/clips";
+import { clipsCount } from "../../src/utils/pluralize";
 
 function formatHeaderDate(): string {
   const d = new Date();
@@ -111,6 +112,16 @@ export default function HomeScreen() {
     },
     accentDot: {
       color: colors.accent,
+    },
+    archiveCount: {
+      marginTop: 6,
+      fontSize: 12,
+      fontFamily: "Inter_400Regular",
+      color: colors.textMuted,
+    },
+    archiveCountNumber: {
+      color: colors.accent,
+      fontFamily: "Inter_500Medium",
     },
     section: {
       paddingHorizontal: 20,
@@ -301,6 +312,12 @@ export default function HomeScreen() {
         <Text style={s.titleText}>
           Сегодняшние <Text style={s.accentDot}>открытия</Text>
         </Text>
+        {clips.length > 0 && (
+          <Text style={s.archiveCount}>
+            <Text style={s.archiveCountNumber}>{clips.length}</Text>
+            {` ${clipsCount(clips.length).split(" ")[1]} в архиве`}
+          </Text>
+        )}
       </View>
 
       {isEmpty ? (

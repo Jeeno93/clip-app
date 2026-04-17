@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import ClipCard from "../../src/components/ClipCard";
 import { useClips } from "../../src/context/ClipsContext";
+import { clipsCount } from "../../src/utils/pluralize";
 
 export default function ArchiveScreen() {
   const colors = useColors();
@@ -149,7 +150,11 @@ export default function ArchiveScreen() {
       <View style={s.header}>
         <View style={s.titleRow}>
           <Text style={s.title}>Архив</Text>
-          <Text style={s.count}>{clips.length} цитат</Text>
+          <Text style={s.count}>
+            {search.trim() || activeTag
+              ? `${filtered.length} из ${clipsCount(clips.length)}`
+              : clipsCount(clips.length)}
+          </Text>
         </View>
         <View style={s.searchRow}>
           <Feather name="search" size={16} color={colors.textMuted} />
