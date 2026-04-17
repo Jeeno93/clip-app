@@ -56,7 +56,7 @@ export default function AddClipScreen() {
     if (reachedLimit) {
       Alert.alert(
         "Лимит достигнут",
-        `Бесплатная версия поддерживает до ${FREE_LIMIT} цитат.`
+        `Бесплатная версия поддерживает до ${FREE_LIMIT} идей.`
       );
       return;
     }
@@ -182,7 +182,7 @@ export default function AddClipScreen() {
         <TouchableOpacity style={s.cancelBtn} onPress={() => router.back()}>
           <Feather name="x" size={22} color={colors.textSecondary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Новая цитата</Text>
+        <Text style={s.headerTitle}>Новая идея</Text>
         <TouchableOpacity
           style={[
             s.saveBtn,
@@ -208,7 +208,7 @@ export default function AddClipScreen() {
           <View style={s.limitBanner}>
             <Feather name="alert-triangle" size={16} color="#F87171" />
             <Text style={s.limitText}>
-              Достигнут лимит бесплатной версии ({FREE_LIMIT} цитат)
+              Достигнут лимит бесплатной версии ({FREE_LIMIT} идей)
             </Text>
           </View>
         )}
@@ -225,7 +225,7 @@ export default function AddClipScreen() {
         )}
 
         <View>
-          <Text style={s.label}>{hasImage ? "Комментарий" : "Цитата"}</Text>
+          <Text style={s.label}>{hasImage ? "Комментарий" : "Идея"}</Text>
           <TextInput
             ref={inputRef}
             value={text}
@@ -233,7 +233,7 @@ export default function AddClipScreen() {
             placeholder={
               hasImage
                 ? "Добавь комментарий..."
-                : "Введи текст цитаты или мысли..."
+                : "Введи текст идеи или мысли..."
             }
             placeholderTextColor={colors.textMuted}
             style={[s.textInput, hasImage && s.textInputCompact]}

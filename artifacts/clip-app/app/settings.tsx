@@ -222,7 +222,7 @@ export default function SettingsScreen() {
         <View style={s.section}>
           <Text style={s.sectionLabel}>Уведомления</Text>
           <Text style={s.sectionHint}>
-            Когда присылать ежедневную цитату из архива.
+            Когда присылать ежедневную идею из архива.
           </Text>
 
           <View style={s.hourGrid}>

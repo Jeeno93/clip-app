@@ -66,7 +66,7 @@ export default function ClipDetailScreen() {
   if (!clip) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
-        <Text style={{ color: colors.textSecondary }}>Цитата не найдена</Text>
+        <Text style={{ color: colors.textSecondary }}>Идея не найдена</Text>
       </View>
     );
   }
@@ -80,7 +80,7 @@ export default function ClipDetailScreen() {
   const handleDelete = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     Alert.alert(
-      "Удалить цитату?",
+      "Удалить идею?",
       "Это действие нельзя отменить.",
       [
         { text: "Отмена", style: "cancel" },
@@ -104,7 +104,7 @@ export default function ClipDetailScreen() {
   const handleSaveText = async () => {
     const trimmed = editedText.trim();
     if (!trimmed) {
-      Alert.alert("Пустой текст", "Текст цитаты не может быть пустым.");
+      Alert.alert("Пустой текст", "Текст идеи не может быть пустым.");
       return;
     }
     if (trimmed === clip.text) {
@@ -491,7 +491,7 @@ export default function ClipDetailScreen() {
 
         <TouchableOpacity style={s.deleteBtn} onPress={handleDelete}>
           <Feather name="trash-2" size={16} color="#F87171" />
-          <Text style={s.deleteBtnText}>Удалить цитату</Text>
+          <Text style={s.deleteBtnText}>Удалить идею</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>

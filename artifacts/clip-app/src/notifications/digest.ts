@@ -22,7 +22,7 @@ export async function scheduleDailyDigest(hour: number): Promise<void> {
 
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: "Твои открытия",
+        title: "Идея дня из твоей базы",
         body,
         sound: true,
       },

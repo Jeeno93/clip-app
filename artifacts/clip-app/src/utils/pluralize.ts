@@ -2,14 +2,14 @@
  * Russian pluralization helper.
  *
  * Picks the correct word form based on the number:
- *   1            → one   ("цитата")
- *   2, 3, 4      → few   ("цитаты")
- *   0, 5–20, etc → many  ("цитат")
+ *   1            → one   ("идея")
+ *   2, 3, 4      → few   ("идеи")
+ *   0, 5–20, etc → many  ("идей")
  *
  * Examples:
- *   pluralize(1,  "цитата", "цитаты", "цитат") → "цитата"
- *   pluralize(3,  "цитата", "цитаты", "цитат") → "цитаты"
- *   pluralize(47, "цитата", "цитаты", "цитат") → "цитат"
+ *   pluralize(1,  "идея", "идеи", "идей") → "идея"
+ *   pluralize(3,  "идея", "идеи", "идей") → "идеи"
+ *   pluralize(47, "идея", "идеи", "идей") → "идей"
  */
 export function pluralize(
   n: number,
@@ -27,9 +27,9 @@ export function pluralize(
   return many;
 }
 
-/** Shortcut: returns "47 цитат", "1 цитата", etc. */
+/** Shortcut: returns "47 идей", "1 идея", etc. */
 export function clipsCount(n: number): string {
-  return `${n} ${pluralize(n, "цитата", "цитаты", "цитат")}`;
+  return `${n} ${pluralize(n, "идея", "идеи", "идей")}`;
 }
 
 /** Shortcut: returns "1 день", "3 дня", "7 дней", etc. */

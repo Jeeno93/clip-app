@@ -385,13 +385,13 @@ export default function HomeScreen() {
           </View>
           <Text style={s.emptyTitle}>Архив пуст</Text>
           <Text style={s.emptySubtitle}>
-            Сохрани первую цитату — и каждый день она будет возвращаться к тебе
+            Сохрани первую идею — и каждый день она будет возвращаться к тебе
           </Text>
           <TouchableOpacity
             style={s.emptyBtn}
             onPress={() => router.push("/add")}
           >
-            <Text style={s.emptyBtnText}>Сохранить первую цитату</Text>
+            <Text style={s.emptyBtnText}>Сохранить первую идею</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -435,7 +435,7 @@ export default function HomeScreen() {
         <TextInput
           value={quickText}
           onChangeText={setQuickText}
-          placeholder="Быстро добавить цитату..."
+          placeholder="Быстро добавить идею..."
           placeholderTextColor={colors.textMuted}
           style={s.quickInput}
           onSubmitEditing={handleQuickAdd}

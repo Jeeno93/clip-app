@@ -48,7 +48,7 @@ export default function ArchiveScreen() {
   const handleDelete = (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     Alert.alert(
-      "Удалить цитату?",
+      "Удалить идею?",
       "Это действие нельзя отменить.",
       [
         { text: "Отмена", style: "cancel" },
@@ -149,7 +149,7 @@ export default function ArchiveScreen() {
     <View style={s.container}>
       <View style={s.header}>
         <View style={s.titleRow}>
-          <Text style={s.title}>Архив</Text>
+          <Text style={s.title}>Твоя база знаний</Text>
           <Text style={s.count}>
             {search.trim() || activeTag
               ? `${filtered.length} из ${clipsCount(clips.length)}`
@@ -224,7 +224,7 @@ export default function ArchiveScreen() {
           <Feather name="inbox" size={36} color={colors.textMuted} />
           <Text style={s.emptyText}>
             {clips.length === 0
-              ? "Архив пуст. Начни сохранять цитаты!"
+              ? "Архив пуст. Начни сохранять идеи!"
               : "Ничего не найдено"}
           </Text>
         </View>

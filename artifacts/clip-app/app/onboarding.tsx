@@ -28,7 +28,7 @@ export default function OnboardingScreen() {
   const [saving, setSaving] = useState(false);
 
   const steps = [
-    "Первая цитата",
+    "Первая идея",
     "Как добавлять",
     "Уведомления",
   ];
@@ -235,15 +235,15 @@ export default function OnboardingScreen() {
           {step === 0 && (
             <>
               <Text style={s.headline}>
-                Сохраняй лучшее.{"\n"}Вспоминай каждый день.
+                Ты читаешь много. Помнишь мало. Clip это исправит.
               </Text>
               <Text style={s.subtitle}>
-                Начни с первой цитаты — той, которую хочется перечитывать.
+                Начни с первой идеи — той, которую хочется перечитывать.
               </Text>
               <TextInput
                 value={firstQuote}
                 onChangeText={setFirstQuote}
-                placeholder="Введи цитату или мысль..."
+                placeholder="Введи идею или мысль..."
                 placeholderTextColor={colors.textMuted}
                 style={s.input}
                 multiline
@@ -278,7 +278,7 @@ export default function OnboardingScreen() {
                 Добавляй из{"\n"}любого приложения
               </Text>
               <Text style={s.subtitle}>
-                Выдели текст в Telegram, браузере или любом другом приложении и поделись им в Clip.
+                Увидел важную мысль — поделись с Clip. Три секунды, и она в архиве навсегда.
               </Text>
               <View style={s.illustrationBox}>
                 {[
@@ -313,7 +313,7 @@ export default function OnboardingScreen() {
           {step === 2 && (
             <>
               <Text style={s.headline}>
-                Когда присылать{"\n"}твои цитаты?
+                Когда присылать лучшее из того что ты читал?
               </Text>
               <Text style={s.subtitle}>
                 Каждый день Clip будет напоминать тебе о сохранённом.
