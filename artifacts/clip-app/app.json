@@ -17,7 +17,8 @@
       "supportsTablet": false
     },
     "android": {
-      "backgroundColor": "#0D0D0D"
+      "backgroundColor": "#0D0D0D",
+      "package": "com.jeeno93.clipapp"
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -45,13 +46,22 @@
             "NSExtensionActivationSupportsText": true,
             "NSExtensionActivationSupportsWebURLWithMaxCount": 1
           },
-          "androidIntentFilters": ["text/*", "image/*"]
+          "androidIntentFilters": [
+            "text/*",
+            "image/*"
+          ]
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "84cad6c1-e813-427a-ba96-2b777c4abb52"
+      }
+    },
+    "owner": "jeeno93"
   }
 }

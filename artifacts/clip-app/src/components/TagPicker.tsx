@@ -1,5 +1,7 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,6 +25,7 @@ export default function TagPicker({
 }: TagPickerProps) {
   const colors = useColors();
   const [newTag, setNewTag] = useState("");
+  const scrollRef = useRef<ScrollView>(null);
 
   const toggle = (tag: string) => {
     if (selected.includes(tag)) {
@@ -41,15 +44,27 @@ export default function TagPicker({
     setNewTag("");
   };
 
+  const handleInputFocus = () => {
+    // Delay so the keyboard has time to start animating in
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  };
+
   const allTags = Array.from(new Set([...existingTags, ...selected]));
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={styles.container}
+    >
       <ScrollView
+        ref={scrollRef}
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.tagsScroll}
         contentContainerStyle={styles.tagsContent}
+        keyboardShouldPersistTaps="handled"
       >
         {allTags.map((tag) => {
           const isSelected = selected.includes(tag);
@@ -97,6 +112,7 @@ export default function TagPicker({
               color: colors.foreground,
             },
           ]}
+          onFocus={handleInputFocus}
           onSubmitEditing={addNewTag}
           returnKeyType="done"
         />
@@ -107,7 +123,7 @@ export default function TagPicker({
           <Feather name="plus" size={18} color={colors.accent} />
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

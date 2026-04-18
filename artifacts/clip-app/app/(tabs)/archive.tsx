@@ -25,14 +25,24 @@ export default function ArchiveScreen() {
   const insets = useSafeAreaInsets();
   const { clips, allTags, removeClip } = useClips();
   const [search, setSearch] = useState("");
-  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [activeTags, setActiveTags] = useState<string[]>([]);
 
   const topPad = Platform.OS === "web" ? insets.top + 67 : insets.top;
 
+  const toggleTag = (tag: string) => {
+    Haptics.selectionAsync();
+    setActiveTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  };
+
   const filtered = useMemo(() => {
     let result = clips;
-    if (activeTag) {
-      result = result.filter((c) => c.tags.includes(activeTag));
+    if (activeTags.length > 0) {
+      // Intersection: clip must contain ALL selected tags
+      result = result.filter((c) =>
+        activeTags.every((t) => c.tags.includes(t))
+      );
     }
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -43,7 +53,9 @@ export default function ArchiveScreen() {
       );
     }
     return result;
-  }, [clips, search, activeTag]);
+  }, [clips, search, activeTags]);
+
+  const hasActiveFilter = search.trim().length > 0 || activeTags.length > 0;
 
   const handleDelete = (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -151,7 +163,7 @@ export default function ArchiveScreen() {
         <View style={s.titleRow}>
           <Text style={s.title}>Твоя база знаний</Text>
           <Text style={s.count}>
-            {search.trim() || activeTag
+            {hasActiveFilter
               ? `${filtered.length} из ${clipsCount(clips.length)}`
               : clipsCount(clips.length)}
           </Text>
@@ -180,14 +192,21 @@ export default function ArchiveScreen() {
             contentContainerStyle={s.tagsContent}
           >
             {tags.map((tag) => {
-              const isActive =
-                tag === "Все" ? activeTag === null : activeTag === tag;
+              const isAll = tag === "Все";
+              const isActive = isAll
+                ? activeTags.length === 0
+                : activeTags.includes(tag);
               return (
                 <TouchableOpacity
                   key={tag}
-                  onPress={() =>
-                    setActiveTag(tag === "Все" ? null : tag)
-                  }
+                  onPress={() => {
+                    if (isAll) {
+                      Haptics.selectionAsync();
+                      setActiveTags([]);
+                    } else {
+                      toggleTag(tag);
+                    }
+                  }}
                   style={[
                     s.tagChip,
                     {
@@ -210,7 +229,7 @@ export default function ArchiveScreen() {
                       },
                     ]}
                   >
-                    {tag === "Все" ? tag : `#${tag}`}
+                    {isAll ? tag : `#${tag}`}
                   </Text>
                 </TouchableOpacity>
               );
