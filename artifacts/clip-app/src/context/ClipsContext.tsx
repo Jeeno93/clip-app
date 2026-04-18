@@ -36,6 +36,7 @@ interface ClipsContextType {
   removeClip: (id: string) => Promise<void>;
   editClipTags: (id: string, tags: string[]) => Promise<void>;
   editClipText: (id: string, text: string) => Promise<void>;
+  editClipSummary: (id: string, summary: string) => Promise<void>;
   getRandomOne: () => Clip | null;
   refreshDailyCards: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -119,6 +120,14 @@ export function ClipsProvider({ children }: { children: React.ReactNode }) {
     [loadAll]
   );
 
+  const editClipSummary = useCallback(
+    async (id: string, summary: string) => {
+      await updateClip(id, { summary });
+      await loadAll();
+    },
+    [loadAll]
+  );
+
   const getRandomOne = useCallback((): Clip | null => {
     if (clips.length === 0) return null;
     return clips[Math.floor(Math.random() * clips.length)];
@@ -142,6 +151,7 @@ export function ClipsProvider({ children }: { children: React.ReactNode }) {
         removeClip,
         editClipTags,
         editClipText,
+        editClipSummary,
         getRandomOne,
         refreshDailyCards,
         refresh: loadAll,

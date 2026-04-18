@@ -21,6 +21,18 @@ export interface Clip {
     imageUrl: string | null;
     url: string;
   };
+  summary?: string;
+}
+
+export type AiProvider = "gemini" | "claude" | "openai";
+export type AiDepth = "quick" | "standard" | "deep";
+
+export interface AiModules {
+  keyIdeas: boolean;
+  terms: boolean;
+  aiPerspective: boolean;
+  questions: boolean;
+  practical: boolean;
 }
 
 export interface Streak {
@@ -34,6 +46,10 @@ export interface Settings {
   notificationHour: number | null;
   onboardingDone: boolean;
   themeMode: ThemeMode;
+  aiProvider: AiProvider | null;
+  aiApiKey: string | null;
+  aiDepth: AiDepth;
+  aiModules: AiModules;
 }
 
 function generateId(): string {
@@ -164,6 +180,16 @@ const DEFAULT_SETTINGS: Settings = {
   notificationHour: null,
   onboardingDone: false,
   themeMode: "dark",
+  aiProvider: null,
+  aiApiKey: null,
+  aiDepth: "standard",
+  aiModules: {
+    keyIdeas: true,
+    terms: true,
+    aiPerspective: false,
+    questions: false,
+    practical: false,
+  },
 };
 
 export async function getSettings(): Promise<Settings> {

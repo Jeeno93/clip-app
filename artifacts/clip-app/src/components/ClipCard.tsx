@@ -113,6 +113,21 @@ export default function ClipCard({
             {clip.text}
           </Text>
         ) : null}
+        {clip.summary ? (
+          <View
+            style={[
+              styles.aiBadge,
+              {
+                backgroundColor: colors.accentSubtle,
+                borderColor: colors.accentDim,
+              },
+            ]}
+          >
+            <Text style={[styles.aiBadgeText, { color: colors.accentDim }]}>
+              ✦ Есть AI-анализ
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.meta}>
           <Text style={[styles.metaText, { color: colors.textSecondary }]}>
             {sourceLabel(clip.source)} · {formatDate(clip.createdAt)}
@@ -226,5 +241,16 @@ const styles = StyleSheet.create({
   tagText: {
     fontSize: 11,
     fontFamily: "Inter_400Regular",
+  },
+  aiBadge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  aiBadgeText: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
   },
 });

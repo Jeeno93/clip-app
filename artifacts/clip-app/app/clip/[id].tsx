@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   KeyboardAvoidingView,
@@ -21,6 +22,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import TagPicker from "../../src/components/TagPicker";
 import { useClips } from "../../src/context/ClipsContext";
+import { getSettings, Settings } from "../../src/storage/clips";
+import { summarizeContent } from "../../src/utils/summarize";
 
 function getDomain(url: string): string {
   try {
@@ -43,7 +46,14 @@ export default function ClipDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { clips, allTags, removeClip, editClipTags, editClipText } = useClips();
+  const {
+    clips,
+    allTags,
+    removeClip,
+    editClipTags,
+    editClipText,
+    editClipSummary,
+  } = useClips();
 
   const clip = useMemo(() => clips.find((c) => c.id === id), [clips, id]);
 
@@ -56,6 +66,16 @@ export default function ClipDetailScreen() {
   const [editedText, setEditedText] = useState("");
   const [savingText, setSavingText] = useState(false);
   const textInputRef = useRef<TextInput>(null);
+
+  // AI analysis state
+  const [aiSettings, setAiSettings] = useState<Settings | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      setAiSettings(await getSettings());
+    })();
+  }, []);
 
   useEffect(() => {
     if (clip) {
@@ -134,6 +154,49 @@ export default function ClipDetailScreen() {
   const handleCancelTextEdit = () => {
     setEditedText(clip.text);
     setEditingText(false);
+  };
+
+  const buildAnalysisInput = (): string => {
+    if (clip.linkPreview) {
+      const parts = [
+        clip.linkPreview.title,
+        clip.linkPreview.description ?? "",
+        clip.text ?? "",
+      ];
+      return parts.filter((s) => s.trim().length > 0).join("\n\n");
+    }
+    return clip.text;
+  };
+
+  const canAnalyze =
+    !!aiSettings?.aiApiKey &&
+    !!aiSettings?.aiProvider &&
+    (!!clip.linkPreview || clip.text.length > 200);
+
+  const handleAnalyze = async () => {
+    if (!aiSettings?.aiApiKey || !aiSettings?.aiProvider) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setAnalyzing(true);
+    try {
+      const result = await summarizeContent(
+        buildAnalysisInput(),
+        aiSettings.aiProvider,
+        aiSettings.aiApiKey,
+        aiSettings.aiDepth,
+        aiSettings.aiModules
+      );
+      if (result === "AUTH_ERROR") {
+        Alert.alert("Ошибка", "Неверный API ключ. Проверь настройки.");
+        return;
+      }
+      if (!result) {
+        Alert.alert("Ошибка", "Не удалось получить ответ. Попробуй позже.");
+        return;
+      }
+      await editClipSummary(clip.id, result);
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
   const s = StyleSheet.create({
@@ -395,6 +458,63 @@ export default function ClipDetailScreen() {
       fontSize: 14,
       fontFamily: "Inter_600SemiBold",
     },
+    analyzeBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      paddingVertical: 13,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.accentDim,
+      backgroundColor: colors.accentSubtle,
+    },
+    analyzeBtnText: {
+      color: colors.accent,
+      fontSize: 14,
+      fontFamily: "Inter_600SemiBold",
+    },
+    summaryBlock: {
+      backgroundColor: colors.accentSubtle,
+      borderWidth: 1,
+      borderColor: colors.accentDim,
+      borderRadius: 12,
+      padding: 14,
+      gap: 10,
+    },
+    summaryHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    summaryTitle: {
+      color: colors.accent,
+      fontSize: 14,
+      fontFamily: "Inter_600SemiBold",
+    },
+    summaryRefresh: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+    },
+    summaryRefreshText: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontFamily: "Inter_500Medium",
+    },
+    summaryParagraph: {
+      color: colors.foreground,
+      fontSize: 14,
+      lineHeight: 21,
+      fontFamily: "Inter_400Regular",
+    },
+    summaryHeading: {
+      color: colors.foreground,
+      fontSize: 14,
+      lineHeight: 21,
+      fontFamily: "Inter_700Bold",
+      marginTop: 4,
+    },
     deleteBtn: {
       flexDirection: "row",
       alignItems: "center",
@@ -603,6 +723,61 @@ export default function ClipDetailScreen() {
             </Text>
           )}
         </View>
+
+        {clip.summary ? (
+          <View style={s.summaryBlock}>
+            <View style={s.summaryHeader}>
+              <Text style={s.summaryTitle}>✦ AI-анализ</Text>
+              <TouchableOpacity
+                style={s.summaryRefresh}
+                onPress={handleAnalyze}
+                disabled={analyzing}
+              >
+                {analyzing ? (
+                  <ActivityIndicator size="small" color={colors.textMuted} />
+                ) : (
+                  <Text style={s.summaryRefreshText}>Обновить</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+            <View>
+              {clip.summary.split("\n").map((line, idx) => {
+                const trimmed = line.trim();
+                if (trimmed.length === 0) {
+                  return <View key={idx} style={{ height: 6 }} />;
+                }
+                const headingMatch = trimmed.match(/^\*\*(.+?)\*\*:?\s*$/);
+                if (headingMatch) {
+                  return (
+                    <Text key={idx} style={s.summaryHeading}>
+                      {headingMatch[1]}
+                    </Text>
+                  );
+                }
+                return (
+                  <Text key={idx} style={s.summaryParagraph}>
+                    {trimmed.replace(/\*\*/g, "")}
+                  </Text>
+                );
+              })}
+            </View>
+          </View>
+        ) : canAnalyze ? (
+          <TouchableOpacity
+            style={s.analyzeBtn}
+            onPress={handleAnalyze}
+            disabled={analyzing}
+          >
+            {analyzing ? (
+              <>
+                <ActivityIndicator size="small" color={colors.accent} />
+                <Text style={s.analyzeBtnText}>Анализирую...</Text>
+              </>
+            ) : (
+              <Text style={s.analyzeBtnText}>✦ Анализировать</Text>
+            )}
+          </TouchableOpacity>
+        ) : null}
 
         <TouchableOpacity style={s.deleteBtn} onPress={handleDelete}>
           <Feather name="trash-2" size={16} color="#F87171" />
