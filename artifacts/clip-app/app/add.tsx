@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -298,6 +299,11 @@ export default function AddClipScreen() {
         </TouchableOpacity>
       </View>
 
+      <KeyboardAvoidingView
+        style={s.content}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+      >
       <ScrollView
         style={s.content}
         contentContainerStyle={s.scrollContent}
@@ -409,6 +415,7 @@ export default function AddClipScreen() {
           />
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }

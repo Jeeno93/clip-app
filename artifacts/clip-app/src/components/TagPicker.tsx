@@ -1,7 +1,5 @@
 import React, { useRef, useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -45,19 +43,16 @@ export default function TagPicker({
   };
 
   const handleInputFocus = () => {
-    // Delay so the keyboard has time to start animating in
+    // Delay so the keyboard has time to fully animate in
     setTimeout(() => {
       scrollRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+    }, 300);
   };
 
   const allTags = Array.from(new Set([...existingTags, ...selected]));
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <ScrollView
         ref={scrollRef}
         horizontal
@@ -123,7 +118,7 @@ export default function TagPicker({
           <Feather name="plus" size={18} color={colors.accent} />
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

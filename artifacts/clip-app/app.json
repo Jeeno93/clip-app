@@ -18,6 +18,7 @@
     },
     "android": {
       "backgroundColor": "#0D0D0D",
+      "softwareKeyboardLayoutMode": "pan",
       "package": "com.jeeno93.clipapp"
     },
     "web": {
