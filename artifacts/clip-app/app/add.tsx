@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,6 +20,11 @@ import { useColors } from "@/hooks/useColors";
 import TagPicker from "../src/components/TagPicker";
 import { useClips } from "../src/context/ClipsContext";
 import { FREE_LIMIT } from "../src/storage/clips";
+import {
+  fetchLinkPreview,
+  isUrl,
+  type LinkPreview,
+} from "../src/utils/fetchLinkPreview";
 
 export default function AddClipScreen() {
   const colors = useColors();
@@ -38,6 +43,10 @@ export default function AddClipScreen() {
   const [tags, setTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
+  const [linkPreview, setLinkPreview] = useState<LinkPreview | null>(null);
+  const [linkUrl, setLinkUrl] = useState<string | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -47,9 +56,44 @@ export default function AddClipScreen() {
     return () => clearTimeout(t);
   }, [hasImage]);
 
-  const source = hasImage ? "screenshot" : (params.source ?? "manual");
+  // Detect a URL in the initial text (shared or pasted) and fetch preview once.
+  useEffect(() => {
+    if (hasImage) return;
+    const trimmed = text.trim();
+    if (!isUrl(trimmed)) return;
+    if (linkUrl === trimmed) return;
+    let cancelled = false;
+    setLinkUrl(trimmed);
+    setLinkPreview(null);
+    setLoadingPreview(true);
+    (async () => {
+      const preview = await fetchLinkPreview(trimmed);
+      if (cancelled) return;
+      setLoadingPreview(false);
+      if (preview) setLinkPreview(preview);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text, hasImage]);
+
+  const source = hasImage
+    ? "screenshot"
+    : linkPreview
+    ? "link"
+    : (params.source ?? "manual");
 
   const canSave = hasImage || text.trim().length > 0;
+
+  const previewDomain = useMemo(() => {
+    if (!linkPreview) return null;
+    try {
+      return new URL(linkPreview.url).hostname.replace(/^www\./, "");
+    } catch {
+      return null;
+    }
+  }, [linkPreview]);
 
   const handleSave = async () => {
     if (!canSave) return;
@@ -62,7 +106,13 @@ export default function AddClipScreen() {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSaving(true);
-    const clip = await addClip(text.trim(), tags, source, imageUri);
+    const clip = await addClip(
+      text.trim(),
+      tags,
+      source,
+      imageUri,
+      linkPreview ?? undefined
+    );
     setSaving(false);
     if (clip) {
       router.back();
@@ -142,6 +192,55 @@ export default function AddClipScreen() {
       height: 200,
       borderRadius: 8,
       backgroundColor: colors.bgInput,
+    },
+    previewLoading: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      padding: 14,
+      backgroundColor: colors.bgInput,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    previewLoadingText: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      fontFamily: "Inter_400Regular",
+    },
+    previewCard: {
+      backgroundColor: colors.bgCard,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: "hidden",
+    },
+    previewImage: {
+      width: "100%",
+      height: 80,
+      backgroundColor: colors.bgInput,
+    },
+    previewBody: {
+      padding: 12,
+      gap: 4,
+    },
+    previewTitle: {
+      fontSize: 15,
+      fontFamily: "Inter_600SemiBold",
+      color: colors.foreground,
+      lineHeight: 20,
+    },
+    previewDescription: {
+      fontSize: 13,
+      fontFamily: "Inter_400Regular",
+      color: colors.textSecondary,
+      lineHeight: 18,
+    },
+    previewDomain: {
+      fontSize: 11,
+      fontFamily: "Inter_400Regular",
+      color: colors.textMuted,
+      marginTop: 4,
     },
     sourceBadge: {
       flexDirection: "row",
@@ -224,8 +323,52 @@ export default function AddClipScreen() {
           </View>
         )}
 
+        {!hasImage && loadingPreview && (
+          <View>
+            <Text style={s.label}>Превью</Text>
+            <View style={s.previewLoading}>
+              <ActivityIndicator size="small" color={colors.accent} />
+              <Text style={s.previewLoadingText}>Загружаю превью...</Text>
+            </View>
+          </View>
+        )}
+
+        {!hasImage && linkPreview && (
+          <View>
+            <Text style={s.label}>Превью</Text>
+            <View style={s.previewCard}>
+              {linkPreview.imageUrl && (
+                <Image
+                  source={{ uri: linkPreview.imageUrl }}
+                  style={s.previewImage}
+                  resizeMode="cover"
+                />
+              )}
+              <View style={s.previewBody}>
+                <Text style={s.previewTitle} numberOfLines={2}>
+                  {linkPreview.title}
+                </Text>
+                {linkPreview.description ? (
+                  <Text style={s.previewDescription} numberOfLines={2}>
+                    {linkPreview.description}
+                  </Text>
+                ) : null}
+                {previewDomain ? (
+                  <Text style={s.previewDomain}>{previewDomain}</Text>
+                ) : null}
+              </View>
+            </View>
+          </View>
+        )}
+
         <View>
-          <Text style={s.label}>{hasImage ? "Комментарий" : "Идея"}</Text>
+          <Text style={s.label}>
+            {hasImage
+              ? "Комментарий"
+              : linkPreview
+              ? "Комментарий"
+              : "Идея"}
+          </Text>
           <TextInput
             ref={inputRef}
             value={text}
@@ -233,10 +376,15 @@ export default function AddClipScreen() {
             placeholder={
               hasImage
                 ? "Добавь комментарий..."
+                : linkPreview
+                ? "Добавь комментарий..."
                 : "Введи текст идеи или мысли..."
             }
             placeholderTextColor={colors.textMuted}
-            style={[s.textInput, hasImage && s.textInputCompact]}
+            style={[
+              s.textInput,
+              (hasImage || linkPreview) && s.textInputCompact,
+            ]}
             multiline
             editable={!reachedLimit}
           />

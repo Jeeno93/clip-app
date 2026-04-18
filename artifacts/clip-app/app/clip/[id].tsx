@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Image,
+  Linking,
   Platform,
   ScrollView,
   Share,
@@ -19,6 +20,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import TagPicker from "../../src/components/TagPicker";
 import { useClips } from "../../src/context/ClipsContext";
+
+function getDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -194,6 +203,67 @@ export default function ClipDetailScreen() {
       borderRadius: 10,
       backgroundColor: colors.bgInput,
       marginBottom: 16,
+    },
+    linkSection: {
+      gap: 12,
+    },
+    linkImage: {
+      width: "100%",
+      height: 180,
+      borderRadius: 10,
+      backgroundColor: colors.bgInput,
+    },
+    linkTitle: {
+      fontSize: 22,
+      fontFamily: "Inter_700Bold",
+      color: colors.foreground,
+      lineHeight: 30,
+    },
+    linkDescription: {
+      fontSize: 15,
+      fontFamily: "Inter_400Regular",
+      color: colors.textSecondary,
+      lineHeight: 22,
+    },
+    linkDomain: {
+      fontSize: 12,
+      fontFamily: "Inter_400Regular",
+      color: colors.textMuted,
+    },
+    openLinkBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      backgroundColor: colors.primary,
+      paddingVertical: 13,
+      borderRadius: 10,
+      marginTop: 4,
+    },
+    openLinkBtnText: {
+      color: colors.primaryForeground,
+      fontSize: 15,
+      fontFamily: "Inter_600SemiBold",
+    },
+    linkCommentDivider: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginTop: 16,
+      marginBottom: 16,
+    },
+    linkCommentLabel: {
+      fontSize: 11,
+      fontFamily: "Inter_500Medium",
+      color: colors.textMuted,
+      textTransform: "uppercase",
+      letterSpacing: 1,
+      marginBottom: 8,
+    },
+    linkCommentText: {
+      fontSize: 16,
+      fontFamily: "Inter_400Regular",
+      color: colors.foreground,
+      lineHeight: 24,
     },
     commentText: {
       fontSize: 16,
@@ -372,8 +442,48 @@ export default function ClipDetailScreen() {
           />
         )}
 
+        {/* ── Link preview (if present) ── */}
+        {clip.linkPreview && (
+          <View style={s.linkSection}>
+            {clip.linkPreview.imageUrl && (
+              <Image
+                source={{ uri: clip.linkPreview.imageUrl }}
+                style={s.linkImage}
+                resizeMode="cover"
+              />
+            )}
+            <Text style={s.linkTitle}>{clip.linkPreview.title}</Text>
+            {clip.linkPreview.description ? (
+              <Text style={s.linkDescription}>
+                {clip.linkPreview.description}
+              </Text>
+            ) : null}
+            <Text style={s.linkDomain}>
+              {getDomain(clip.linkPreview.url)}
+            </Text>
+            <TouchableOpacity
+              style={s.openLinkBtn}
+              onPress={() => Linking.openURL(clip.linkPreview!.url)}
+            >
+              <Feather
+                name="external-link"
+                size={16}
+                color={colors.primaryForeground}
+              />
+              <Text style={s.openLinkBtnText}>Открыть статью</Text>
+            </TouchableOpacity>
+            {clip.text ? (
+              <>
+                <View style={s.linkCommentDivider} />
+                <Text style={s.linkCommentLabel}>Комментарий</Text>
+                <Text style={s.linkCommentText}>{clip.text}</Text>
+              </>
+            ) : null}
+          </View>
+        )}
+
         {/* ── Text / comment section ── */}
-        {(clip.text || !clip.imageUri || editingText) && (
+        {!clip.linkPreview && (clip.text || !clip.imageUri || editingText) && (
           <View style={s.quoteSection}>
             <View style={s.quoteSectionHeader}>
               <View style={s.accentBar} />

@@ -23,6 +23,14 @@ function sourceLabel(source: string): string {
   return source;
 }
 
+function getDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
 interface ClipCardProps {
   clip: Clip;
   onPress?: () => void;
@@ -62,7 +70,42 @@ export default function ClipCard({
             resizeMode="cover"
           />
         ) : null}
-        {clip.text ? (
+        {clip.linkPreview ? (
+          <View style={styles.linkPreview}>
+            {clip.linkPreview.imageUrl ? (
+              <Image
+                source={{ uri: clip.linkPreview.imageUrl }}
+                style={styles.linkImage}
+                resizeMode="cover"
+              />
+            ) : null}
+            <Text
+              style={[styles.linkTitle, { color: colors.foreground }]}
+              numberOfLines={2}
+            >
+              {clip.linkPreview.title}
+            </Text>
+            {clip.linkPreview.description ? (
+              <Text
+                style={[styles.linkDescription, { color: colors.textSecondary }]}
+                numberOfLines={2}
+              >
+                {clip.linkPreview.description}
+              </Text>
+            ) : null}
+            <Text style={[styles.linkDomain, { color: colors.textMuted }]}>
+              {getDomain(clip.linkPreview.url)}
+            </Text>
+            {clip.text ? (
+              <Text
+                style={[styles.linkComment, { color: colors.textSecondary }]}
+                numberOfLines={compact ? 2 : undefined}
+              >
+                {clip.text}
+              </Text>
+            ) : null}
+          </View>
+        ) : clip.text ? (
           <Text
             style={[styles.text, { color: colors.foreground }]}
             numberOfLines={compact ? 4 : undefined}
@@ -128,6 +171,37 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 120,
     borderRadius: 6,
+  },
+  linkPreview: {
+    gap: 4,
+  },
+  linkImage: {
+    width: "100%",
+    height: 100,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  linkTitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontFamily: "Inter_600SemiBold",
+  },
+  linkDescription: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: "Inter_400Regular",
+  },
+  linkDomain: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    marginTop: 2,
+  },
+  linkComment: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: "Inter_400Regular",
+    marginTop: 6,
+    fontStyle: "italic",
   },
   meta: {
     flexDirection: "row",

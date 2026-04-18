@@ -15,6 +15,12 @@ export interface Clip {
   source: string;
   tags: string[];
   createdAt: string;
+  linkPreview?: {
+    title: string;
+    description: string | null;
+    imageUrl: string | null;
+    url: string;
+  };
 }
 
 export interface Streak {
