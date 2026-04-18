@@ -1,0 +1,151 @@
+Добавь в Clip AI-суммаризацию статей через пользовательский 
+API ключ. Поддержать три провайдера: Google Gemini, Anthropic 
+Claude, OpenAI. Пользователь выбирает провайдера и настраивает 
+что именно анализировать.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 1 — Storage (src/storage/clips.ts)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Добавь в структуру Clip новое поле:
+  summary?: string  // сохранённый конспект
+
+Добавь в структуру Settings:
+  aiProvider: "gemini" | "claude" | "openai" | null
+  aiApiKey: string | null
+  aiDepth: "quick" | "standard" | "deep"
+  aiModules: {
+    keyIdeas: boolean       // Ключевые идеи (default: true)
+    terms: boolean          // Объяснение терминов (default: true)
+    aiPerspective: boolean  // Взгляд AI (default: false)
+    questions: boolean      // Вопросы для размышления (default: false)
+    practical: boolean      // Практическое применение (default: false)
+  }
+
+DEFAULT_SETTINGS обнови соответственно.
+AsyncStorage ключи не меняй — миграция через spread как сейчас.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 2 — Функция суммаризации
+(src/utils/summarize.ts)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Создай файл с одной экспортируемой функцией:
+
+async function summarizeContent(
+  text: string,
+  provider: "gemini" | "claude" | "openai",
+  apiKey: string,
+  depth: "quick" | "standard" | "deep",
+  modules: AiModules
+): Promise<string | null>
+
+ПОСТРОЕНИЕ ПРОМПТА:
+
+Промпт строится динамически из выбранных модулей.
+Глубина влияет на инструкцию для AI:
+- quick: "Отвечай кратко, 1-2 предложения на каждый пункт"
+- standard: "Отвечай развёрнуто, 2-4 предложения на каждый пункт"  
+- deep: "Отвечай детально и глубоко, не ограничивай себя объёмом"
+
+Системный промпт:
+"Ты помогаешь пользователю извлекать знания из статей и постов.
+Отвечай на русском языке. ${инструкция глубины}"
+
+Пользовательский промпт собирается из активных модулей:
+"Проанализируй этот текст и ответь по следующим пунктам:
+${keyIdeas ? '**Ключевые идеи**\nВыдели главные мысли автора. Сколько идей — столько сколько есть, не больше и не меньше.' : ''}
+${terms ? '**Термины и понятия**\nОбъясни сложные термины и концепции простым языком.' : ''}
+${aiPerspective ? '**Взгляд AI**\nТвоя оценка материала: что важно, что спорно, что упущено.' : ''}
+${questions ? '**Вопросы для размышления**\nСформулируй 2-3 вопроса которые этот материал поднимает.' : ''}
+${practical ? '**Практическое применение**\nКак эти идеи можно применить на практике.' : ''}
+
+Текст: ${text}"
+
+ВЫЗОВЫ API по провайдерам:
+
+Gemini:
+  URL: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}
+  Method: POST
+  Body: {
+    "contents": [{ "parts": [{ "text": fullPrompt }] }],
+    "generationConfig": { "maxOutputTokens": 1500 }
+  }
+  Ответ: data.candidates[0].content.parts[0].text
+
+Claude:
+  URL: https://api.anthropic.com/v1/messages
+  Headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" }
+  Body: {
+    "model": "claude-haiku-4-5-20251001",
+    "max_tokens": 1500,
+    "system": systemPrompt,
+    "messages": [{ "role": "user", "content": userPrompt }]
+  }
+  Ответ: data.content[0].text
+
+OpenAI:
+  URL: https://api.openai.com/v1/chat/completions
+  Headers: { "Authorization": "Bearer ${apiKey}" }
+  Body: {
+    "model": "gpt-4o-mini",
+    "max_tokens": 1500,
+    "messages": [
+      { "role": "system", "content": systemPrompt },
+      { "role": "user", "content": userPrompt }
+    ]
+  }
+  Ответ: data.choices[0].message.content
+
+Обработка ошибок (для всех провайдеров):
+- Статус 401 → вернуть строку "AUTH_ERROR"
+- Таймаут 10 секунд → вернуть null
+- Любая другая ошибка → вернуть null
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 3 — Настройки AI (app/settings.tsx)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Добавь новый раздел "AI-анализ (бета)" в конец экрана настроек.
+
+БЛОК 1 — Провайдер (три карточки в ряд как выбор темы):
+  Gemini  |  Claude  |  OpenAI
+  Активный подсвечен янтарной рамкой.
+  Под каждой карточкой подпись:
+  Gemini → "Бесплатно"
+  Claude → "Платно"
+  OpenAI → "Платно"
+
+БЛОК 2 — API ключ:
+  TextInput placeholder зависит от провайдера:
+  Gemini → "AIza..."
+  Claude → "sk-ant-..."
+  OpenAI → "sk-..."
+  Кнопка "Сохранить" янтарная.
+  Статус под кнопкой: "Ключ сохранён ✓" / пусто.
+  Подсказка под полем серым текстом:
+  Gemini → "Получить ключ: aistudio.google.com"
+  Claude → "Получить ключ: console.anthropic.com"
+  OpenAI → "Получить ключ: platform.openai.com"
+
+БЛОК 3 — Глубина анализа (три кнопки в ряд):
+  Быстро  |  Стандарт  |  Глубоко
+  Активная подсвечена янтарным.
+
+БЛОК 4 — Что включать (список переключателей Switch):
+  ☑ Ключевые идеи
+  ☑ Объяснение терминов
+  ☐ Взгляд AI на материал
+  ☐ Вопросы для размышления
+  ☐ Практическое применение
+  
+  Switch компонент из React Native.
+  Активный цвет Switch: accent (#F5C842 тёмная / #B8901C светлая).
+  Каждый переключатель сохраняется сразу при изменении.
+
+Все изменения в блоках 1-4 сохранять в settings через 
+saveSettings() сразу при выборе — не нужна отдельная 
+кнопка "Сохранить настройки AI" (только для API ключа).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ
