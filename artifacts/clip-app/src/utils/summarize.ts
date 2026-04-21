@@ -67,7 +67,7 @@ async function callGemini(
   userPrompt: string,
   textLength: number
 ): Promise<string | null> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
   const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
   console.log("AI request:", { provider: "gemini", url, textLength });
   const res = await fetchWithTimeout(url, {
