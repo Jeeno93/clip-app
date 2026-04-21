@@ -1,6 +1,6 @@
 import type { AiDepth, AiModules, AiProvider } from "../storage/clips";
 
-const TIMEOUT_MS = 10000;
+const TIMEOUT_MS = 15000;
 
 function depthInstruction(depth: AiDepth): string {
   switch (depth) {
@@ -64,10 +64,12 @@ async function fetchWithTimeout(
 async function callGemini(
   apiKey: string,
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  textLength: number
 ): Promise<string | null> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${encodeURIComponent(apiKey)}`;
   const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
+  console.log("AI request:", { provider: "gemini", url, textLength });
   const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -76,9 +78,11 @@ async function callGemini(
       generationConfig: { maxOutputTokens: 1500 },
     }),
   });
+  console.log("AI response status:", res.status);
   if (res.status === 401 || res.status === 403) return "AUTH_ERROR";
+  const data = await res.json().catch(() => null);
+  console.log("AI response body:", JSON.stringify(data));
   if (!res.ok) return null;
-  const data = await res.json();
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   return typeof text === "string" && text.trim() ? text.trim() : null;
 }
@@ -86,9 +90,12 @@ async function callGemini(
 async function callClaude(
   apiKey: string,
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  textLength: number
 ): Promise<string | null> {
-  const res = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
+  const url = "https://api.anthropic.com/v1/messages";
+  console.log("AI request:", { provider: "claude", url, textLength });
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -102,9 +109,11 @@ async function callClaude(
       messages: [{ role: "user", content: userPrompt }],
     }),
   });
+  console.log("AI response status:", res.status);
   if (res.status === 401 || res.status === 403) return "AUTH_ERROR";
+  const data = await res.json().catch(() => null);
+  console.log("AI response body:", JSON.stringify(data));
   if (!res.ok) return null;
-  const data = await res.json();
   const text = data?.content?.[0]?.text;
   return typeof text === "string" && text.trim() ? text.trim() : null;
 }
@@ -112,10 +121,13 @@ async function callClaude(
 async function callOpenAI(
   apiKey: string,
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  textLength: number
 ): Promise<string | null> {
+  const url = "https://api.openai.com/v1/chat/completions";
+  console.log("AI request:", { provider: "openai", url, textLength });
   const res = await fetchWithTimeout(
-    "https://api.openai.com/v1/chat/completions",
+    url,
     {
       method: "POST",
       headers: {
@@ -132,9 +144,11 @@ async function callOpenAI(
       }),
     }
   );
+  console.log("AI response status:", res.status);
   if (res.status === 401 || res.status === 403) return "AUTH_ERROR";
+  const data = await res.json().catch(() => null);
+  console.log("AI response body:", JSON.stringify(data));
   if (!res.ok) return null;
-  const data = await res.json();
   const text = data?.choices?.[0]?.message?.content;
   return typeof text === "string" && text.trim() ? text.trim() : null;
 }
@@ -160,16 +174,17 @@ export async function summarizeContent(
 
   try {
     if (provider === "gemini") {
-      return await callGemini(apiKey, systemPrompt, userPrompt);
+      return await callGemini(apiKey, systemPrompt, userPrompt, text.length);
     }
     if (provider === "claude") {
-      return await callClaude(apiKey, systemPrompt, userPrompt);
+      return await callClaude(apiKey, systemPrompt, userPrompt, text.length);
     }
     if (provider === "openai") {
-      return await callOpenAI(apiKey, systemPrompt, userPrompt);
+      return await callOpenAI(apiKey, systemPrompt, userPrompt, text.length);
     }
     return null;
-  } catch {
+  } catch (error) {
+    console.error("AI error:", error);
     return null;
   }
 }

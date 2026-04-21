@@ -140,6 +140,12 @@ export default function SettingsScreen() {
     const trimmed = aiKeyDraft.trim();
     setAiApiKey(trimmed);
     await saveSettings({ aiApiKey: trimmed.length > 0 ? trimmed : null });
+    const verify = await getSettings();
+    console.log("Saved API key:", {
+      provider: verify.aiProvider,
+      keyLength: verify.aiApiKey?.length ?? 0,
+      keyPreview: verify.aiApiKey?.slice(0, 10) + "...",
+    });
     setKeyJustSaved(true);
   };
 

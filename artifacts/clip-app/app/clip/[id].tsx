@@ -178,10 +178,14 @@ export default function ClipDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setAnalyzing(true);
     try {
+      const text = buildAnalysisInput();
+      const apiKey = aiSettings.aiApiKey;
+      console.log("Using apiKey:", apiKey?.slice(0, 10) + "...");
+      console.log("Text for analysis:", text?.slice(0, 100));
       const result = await summarizeContent(
-        buildAnalysisInput(),
+        text,
         aiSettings.aiProvider,
-        aiSettings.aiApiKey,
+        apiKey,
         aiSettings.aiDepth,
         aiSettings.aiModules
       );
