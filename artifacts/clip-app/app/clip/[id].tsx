@@ -198,6 +198,8 @@ export default function ClipDetailScreen() {
         return;
       }
       await editClipSummary(clip.id, result);
+    } catch (error: any) {
+      Alert.alert("Ошибка AI", error?.message || "Неизвестная ошибка");
     } finally {
       setAnalyzing(false);
     }

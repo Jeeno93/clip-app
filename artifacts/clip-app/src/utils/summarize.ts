@@ -183,8 +183,8 @@ export async function summarizeContent(
       return await callOpenAI(apiKey, systemPrompt, userPrompt, text.length);
     }
     return null;
-  } catch (error) {
+  } catch (error: any) {
     console.error("AI error:", error);
-    return null;
+    throw new Error(error?.message || JSON.stringify(error));
   }
 }
