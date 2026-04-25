@@ -80,9 +80,12 @@ async function callGemini(
   });
   console.log("AI response status:", res.status);
   if (res.status === 401 || res.status === 403) return "AUTH_ERROR";
-  const data = await res.json().catch(() => null);
+  const data = await res.json().catch((e) => ({ _parseError: e.message }));
   console.log("AI response body:", JSON.stringify(data));
-  if (!res.ok) return null;
+  if (!res.ok) {
+    const errText = JSON.stringify(data);
+    throw new Error(`HTTP ${res.status}: ${errText}`);
+  }
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   return typeof text === "string" && text.trim() ? text.trim() : null;
 }
@@ -111,9 +114,12 @@ async function callClaude(
   });
   console.log("AI response status:", res.status);
   if (res.status === 401 || res.status === 403) return "AUTH_ERROR";
-  const data = await res.json().catch(() => null);
+  const data = await res.json().catch((e) => ({ _parseError: e.message }));
   console.log("AI response body:", JSON.stringify(data));
-  if (!res.ok) return null;
+  if (!res.ok) {
+    const errText = JSON.stringify(data);
+    throw new Error(`HTTP ${res.status}: ${errText}`);
+  }
   const text = data?.content?.[0]?.text;
   return typeof text === "string" && text.trim() ? text.trim() : null;
 }
@@ -146,9 +152,12 @@ async function callOpenAI(
   );
   console.log("AI response status:", res.status);
   if (res.status === 401 || res.status === 403) return "AUTH_ERROR";
-  const data = await res.json().catch(() => null);
+  const data = await res.json().catch((e) => ({ _parseError: e.message }));
   console.log("AI response body:", JSON.stringify(data));
-  if (!res.ok) return null;
+  if (!res.ok) {
+    const errText = JSON.stringify(data);
+    throw new Error(`HTTP ${res.status}: ${errText}`);
+  }
   const text = data?.choices?.[0]?.message?.content;
   return typeof text === "string" && text.trim() ? text.trim() : null;
 }
