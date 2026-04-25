@@ -1,6 +1,9 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import type { AiDepth, AiModules, AiProvider } from "../storage/clips";
 
-const TIMEOUT_MS = 15000;
+const TIMEOUT_MS = 30000;
+const YANDEX_FOLDER_ID_KEY = "@clip:yandex_folder_id";
 
 function depthInstruction(depth: AiDepth): string {
   switch (depth) {
@@ -162,6 +165,84 @@ async function callOpenAI(
   return typeof text === "string" && text.trim() ? text.trim() : null;
 }
 
+async function callDeepSeek(
+  apiKey: string,
+  systemPrompt: string,
+  userPrompt: string,
+  textLength: number
+): Promise<string | null> {
+  const url = "https://api.deepseek.com/chat/completions";
+  console.log("AI request:", { provider: "deepseek", url, textLength });
+  const res = await fetchWithTimeout(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "deepseek-chat",
+      max_tokens: 1500,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+    }),
+  });
+  console.log("AI response status:", res.status);
+  if (res.status === 401 || res.status === 403) return "AUTH_ERROR";
+  const data = await res.json().catch((e) => ({ _parseError: e.message }));
+  console.log("AI response body:", JSON.stringify(data));
+  if (!res.ok) {
+    const errText = JSON.stringify(data);
+    throw new Error(`HTTP ${res.status}: ${errText}`);
+  }
+  const text = data?.choices?.[0]?.message?.content;
+  return typeof text === "string" && text.trim() ? text.trim() : null;
+}
+
+async function callYandex(
+  apiKey: string,
+  systemPrompt: string,
+  userPrompt: string,
+  textLength: number
+): Promise<string | null> {
+  const folderId = (await AsyncStorage.getItem(YANDEX_FOLDER_ID_KEY))?.trim();
+  if (!folderId) {
+    throw new Error("Не указан FolderID для YandexGPT. Заполни его в настройках.");
+  }
+  const url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion";
+  console.log("AI request:", { provider: "yandex", url, textLength });
+  const res = await fetchWithTimeout(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Api-Key ${apiKey}`,
+    },
+    body: JSON.stringify({
+      modelUri: `gpt://${folderId}/yandexgpt-lite`,
+      completionOptions: {
+        stream: false,
+        temperature: 0.6,
+        maxTokens: "1500",
+      },
+      messages: [
+        { role: "system", text: systemPrompt },
+        { role: "user", text: userPrompt },
+      ],
+    }),
+  });
+  console.log("AI response status:", res.status);
+  if (res.status === 401 || res.status === 403) return "AUTH_ERROR";
+  const data = await res.json().catch((e) => ({ _parseError: e.message }));
+  console.log("AI response body:", JSON.stringify(data));
+  if (!res.ok) {
+    const errText = JSON.stringify(data);
+    throw new Error(`HTTP ${res.status}: ${errText}`);
+  }
+  const text = data?.result?.alternatives?.[0]?.message?.text;
+  return typeof text === "string" && text.trim() ? text.trim() : null;
+}
+
 export async function summarizeContent(
   text: string,
   provider: AiProvider,
@@ -190,6 +271,12 @@ export async function summarizeContent(
     }
     if (provider === "openai") {
       return await callOpenAI(apiKey, systemPrompt, userPrompt, text.length);
+    }
+    if (provider === "deepseek") {
+      return await callDeepSeek(apiKey, systemPrompt, userPrompt, text.length);
+    }
+    if (provider === "yandex") {
+      return await callYandex(apiKey, systemPrompt, userPrompt, text.length);
     }
     return null;
   } catch (error: any) {

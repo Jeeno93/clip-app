@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
@@ -31,6 +32,8 @@ import {
   ThemeMode,
 } from "../src/storage/clips";
 
+const YANDEX_FOLDER_ID_KEY = "@clip:yandex_folder_id";
+
 const PROVIDERS: {
   value: AiProvider;
   label: string;
@@ -38,6 +41,20 @@ const PROVIDERS: {
   placeholder: string;
   hint: string;
 }[] = [
+  {
+    value: "deepseek",
+    label: "DeepSeek",
+    pricing: "Доступен в РФ",
+    placeholder: "sk-...",
+    hint: "Получить ключ: platform.deepseek.com",
+  },
+  {
+    value: "yandex",
+    label: "YandexGPT",
+    pricing: "Рубли, РФ",
+    placeholder: "AQVN...",
+    hint: "Получить ключ: console.yandex.cloud",
+  },
   {
     value: "gemini",
     label: "Gemini",
@@ -104,6 +121,8 @@ export default function SettingsScreen() {
   const [aiProvider, setAiProvider] = useState<AiProvider | null>(null);
   const [aiApiKey, setAiApiKey] = useState<string>("");
   const [aiKeyDraft, setAiKeyDraft] = useState<string>("");
+  const [yandexFolderId, setYandexFolderId] = useState<string>("");
+  const [yandexFolderDraft, setYandexFolderDraft] = useState<string>("");
   const [aiDepth, setAiDepth] = useState<AiDepth>("standard");
   const [aiModules, setAiModules] = useState<AiModules>({
     keyIdeas: true,
@@ -123,6 +142,9 @@ export default function SettingsScreen() {
       setAiKeyDraft(st.aiApiKey ?? "");
       setAiDepth(st.aiDepth);
       setAiModules(st.aiModules);
+      const folder = (await AsyncStorage.getItem(YANDEX_FOLDER_ID_KEY)) ?? "";
+      setYandexFolderId(folder);
+      setYandexFolderDraft(folder);
       setLoading(false);
     })();
   }, []);
@@ -140,6 +162,15 @@ export default function SettingsScreen() {
     const trimmed = aiKeyDraft.trim();
     setAiApiKey(trimmed);
     await saveSettings({ aiApiKey: trimmed.length > 0 ? trimmed : null });
+    if (aiProvider === "yandex") {
+      const folderTrimmed = yandexFolderDraft.trim();
+      setYandexFolderId(folderTrimmed);
+      if (folderTrimmed.length > 0) {
+        await AsyncStorage.setItem(YANDEX_FOLDER_ID_KEY, folderTrimmed);
+      } else {
+        await AsyncStorage.removeItem(YANDEX_FOLDER_ID_KEY);
+      }
+    }
     const verify = await getSettings();
     console.log("Saved API key:", {
       provider: verify.aiProvider,
@@ -302,10 +333,13 @@ export default function SettingsScreen() {
     },
     providerRow: {
       flexDirection: "row",
+      flexWrap: "wrap",
       gap: 8,
     },
     providerCard: {
-      flex: 1,
+      flexGrow: 1,
+      flexBasis: "30%",
+      minWidth: 90,
       paddingVertical: 14,
       paddingHorizontal: 6,
       borderRadius: 12,
@@ -539,6 +573,20 @@ export default function SettingsScreen() {
                 autoCorrect={false}
                 secureTextEntry
               />
+              {aiProvider === "yandex" && (
+                <TextInput
+                  value={yandexFolderDraft}
+                  onChangeText={(v) => {
+                    setYandexFolderDraft(v);
+                    setKeyJustSaved(false);
+                  }}
+                  placeholder="b1g..."
+                  placeholderTextColor={colors.textMuted}
+                  style={[s.apiKeyInput, { marginTop: 8 }]}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              )}
               <TouchableOpacity
                 style={s.saveKeyBtn}
                 onPress={handleSaveApiKey}
@@ -546,9 +594,18 @@ export default function SettingsScreen() {
                 <Text style={s.saveKeyBtnText}>Сохранить</Text>
               </TouchableOpacity>
               <Text style={s.keyStatus}>
-                {keyJustSaved && aiApiKey ? "Ключ сохранён ✓" : ""}
+                {keyJustSaved && aiApiKey
+                  ? aiProvider === "yandex"
+                    ? "Ключ и FolderID сохранены ✓"
+                    : "Ключ сохранён ✓"
+                  : ""}
               </Text>
               <Text style={s.keyHint}>{currentProvider.hint}</Text>
+              {aiProvider === "yandex" && (
+                <Text style={s.keyHint}>
+                  FolderID обязателен для YandexGPT
+                </Text>
+              )}
             </View>
           )}
 

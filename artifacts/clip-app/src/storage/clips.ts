@@ -24,7 +24,7 @@ export interface Clip {
   summary?: string;
 }
 
-export type AiProvider = "gemini" | "claude" | "openai";
+export type AiProvider = "gemini" | "claude" | "openai" | "deepseek" | "yandex";
 export type AiDepth = "quick" | "standard" | "deep";
 
 export interface AiModules {
