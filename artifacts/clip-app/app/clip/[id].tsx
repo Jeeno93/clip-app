@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -71,11 +71,18 @@ export default function ClipDetailScreen() {
   const [aiSettings, setAiSettings] = useState<Settings | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      setAiSettings(await getSettings());
-    })();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      (async () => {
+        const s = await getSettings();
+        if (active) setAiSettings(s);
+      })();
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
 
   useEffect(() => {
     if (clip) {
@@ -175,17 +182,24 @@ export default function ClipDetailScreen() {
 
   const handleAnalyze = async () => {
     if (!aiSettings?.aiApiKey || !aiSettings?.aiProvider) return;
+    const m = aiSettings.aiModules;
+    const anyActive =
+      m.keyIdeas || m.terms || m.aiPerspective || m.questions || m.practical;
+    if (!anyActive) {
+      Alert.alert(
+        "Нет активных модулей",
+        "Включи хотя бы один модуль анализа в настройках AI"
+      );
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setAnalyzing(true);
     try {
       const text = buildAnalysisInput();
-      const apiKey = aiSettings.aiApiKey;
-      console.log("Using apiKey:", apiKey?.slice(0, 10) + "...");
-      console.log("Text for analysis:", text?.slice(0, 100));
       const result = await summarizeContent(
         text,
         aiSettings.aiProvider,
-        apiKey,
+        aiSettings.aiApiKey,
         aiSettings.aiDepth,
         aiSettings.aiModules
       );

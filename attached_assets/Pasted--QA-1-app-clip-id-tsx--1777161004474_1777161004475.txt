@@ -1,0 +1,73 @@
+Исправь баги найденные при QA. Список по приоритету:
+
+ВЫСОКИЙ ПРИОРИТЕТ:
+
+1. app/clip/[id].tsx — перечитывать aiSettings при focus экрана
+Добавь useFocusEffect (из expo-router или 
+@react-navigation/native) который при каждом входе на экран 
+заново читает настройки AI из AsyncStorage через getSettings().
+Сейчас настройки читаются один раз при монтировании и не 
+обновляются если пользователь сменил провайдер или ключ в 
+настройках и вернулся назад.
+
+2. app/clip/[id].tsx и/или summarize.ts — понятная ошибка 
+когда все модули AI выключены
+Если пользователь нажимает "Анализировать" но все чекбоксы 
+в aiModules выключены — не делать запрос к API, показать Alert:
+"Включи хотя бы один модуль анализа в настройках AI"
+
+СРЕДНИЙ ПРИОРИТЕТ:
+
+3. Удали все console.log которые выводят чувствительные данные:
+- В summarize.ts: логи с apiKey, url с ключом, телом ответа
+- В app/clip/[id].tsx: лог с apiKey
+- В app/settings.tsx: лог с сохранённым ключом
+Оставь только console.error для реальных ошибок без 
+чувствительных данных.
+
+4. storage/clips.ts — deep-merge для aiModules в getSettings()
+Сейчас если в сохранённых настройках отсутствует какой-то 
+ключ из aiModules (например новый модуль добавили позже) — 
+он не дополняется из DEFAULT_SETTINGS.
+Исправь миграцию:
+const saved = JSON.parse(raw);
+return {
+  ...DEFAULT_SETTINGS,
+  ...saved,
+  aiModules: {
+    ...DEFAULT_SETTINGS.aiModules,
+    ...(saved.aiModules ?? {})
+  }
+};
+
+НИЗКИЙ ПРИОРИТЕТ:
+
+5. storage/clips.ts — защита от гонки в saveSettings
+Добавь простой mutex флаг чтобы параллельные вызовы 
+saveSettings не перезаписывали друг друга:
+let isSaving = false;
+async function saveSettings(settings) {
+  if (isSaving) return;
+  isSaving = true;
+  try {
+    await AsyncStorage.setItem(...)
+  } finally {
+    isSaving = false;
+  }
+}
+
+6. storage/clips.ts — дополнять daily cards до 3 после удаления
+В getDailyCards() после получения карточек проверяй что 
+все ID из @clip:daily_cards ещё существуют в архиве.
+Если какой-то был удалён — добрать случайных из оставшихся 
+до 3 штук и обновить @clip:daily_cards.
+
+7. storage/clips.ts — streak в UTC вместо локального TZ
+Замени во всех местах где считается streak:
+new Date().toDateString() 
+на:
+new Date().toISOString().slice(0, 10)
+Это даст формат "2026-04-26" независимо от часового пояса.
+
+После всех исправлений обнови CLIP_DOCUMENTATION.md.
+Больше ничего не меняй.

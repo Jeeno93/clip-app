@@ -67,12 +67,10 @@ async function fetchWithTimeout(
 async function callGemini(
   apiKey: string,
   systemPrompt: string,
-  userPrompt: string,
-  textLength: number
+  userPrompt: string
 ): Promise<string | null> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
   const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
-  console.log("AI request:", { provider: "gemini", url, textLength });
   const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -81,13 +79,10 @@ async function callGemini(
       generationConfig: { maxOutputTokens: 1500 },
     }),
   });
-  console.log("AI response status:", res.status);
   if (res.status === 401 || res.status === 403) return "AUTH_ERROR";
   const data = await res.json().catch((e) => ({ _parseError: e.message }));
-  console.log("AI response body:", JSON.stringify(data));
   if (!res.ok) {
-    const errText = JSON.stringify(data);
-    throw new Error(`HTTP ${res.status}: ${errText}`);
+    throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
   }
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   return typeof text === "string" && text.trim() ? text.trim() : null;
@@ -96,11 +91,9 @@ async function callGemini(
 async function callClaude(
   apiKey: string,
   systemPrompt: string,
-  userPrompt: string,
-  textLength: number
+  userPrompt: string
 ): Promise<string | null> {
   const url = "https://api.anthropic.com/v1/messages";
-  console.log("AI request:", { provider: "claude", url, textLength });
   const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: {
@@ -115,13 +108,10 @@ async function callClaude(
       messages: [{ role: "user", content: userPrompt }],
     }),
   });
-  console.log("AI response status:", res.status);
   if (res.status === 401 || res.status === 403) return "AUTH_ERROR";
   const data = await res.json().catch((e) => ({ _parseError: e.message }));
-  console.log("AI response body:", JSON.stringify(data));
   if (!res.ok) {
-    const errText = JSON.stringify(data);
-    throw new Error(`HTTP ${res.status}: ${errText}`);
+    throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
   }
   const text = data?.content?.[0]?.text;
   return typeof text === "string" && text.trim() ? text.trim() : null;
@@ -130,36 +120,28 @@ async function callClaude(
 async function callOpenAI(
   apiKey: string,
   systemPrompt: string,
-  userPrompt: string,
-  textLength: number
+  userPrompt: string
 ): Promise<string | null> {
   const url = "https://api.openai.com/v1/chat/completions";
-  console.log("AI request:", { provider: "openai", url, textLength });
-  const res = await fetchWithTimeout(
-    url,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        max_tokens: 1500,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-    }
-  );
-  console.log("AI response status:", res.status);
+  const res = await fetchWithTimeout(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      max_tokens: 1500,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+    }),
+  });
   if (res.status === 401 || res.status === 403) return "AUTH_ERROR";
   const data = await res.json().catch((e) => ({ _parseError: e.message }));
-  console.log("AI response body:", JSON.stringify(data));
   if (!res.ok) {
-    const errText = JSON.stringify(data);
-    throw new Error(`HTTP ${res.status}: ${errText}`);
+    throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
   }
   const text = data?.choices?.[0]?.message?.content;
   return typeof text === "string" && text.trim() ? text.trim() : null;
@@ -168,11 +150,9 @@ async function callOpenAI(
 async function callDeepSeek(
   apiKey: string,
   systemPrompt: string,
-  userPrompt: string,
-  textLength: number
+  userPrompt: string
 ): Promise<string | null> {
   const url = "https://api.deepseek.com/chat/completions";
-  console.log("AI request:", { provider: "deepseek", url, textLength });
   const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: {
@@ -188,13 +168,10 @@ async function callDeepSeek(
       ],
     }),
   });
-  console.log("AI response status:", res.status);
   if (res.status === 401 || res.status === 403) return "AUTH_ERROR";
   const data = await res.json().catch((e) => ({ _parseError: e.message }));
-  console.log("AI response body:", JSON.stringify(data));
   if (!res.ok) {
-    const errText = JSON.stringify(data);
-    throw new Error(`HTTP ${res.status}: ${errText}`);
+    throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
   }
   const text = data?.choices?.[0]?.message?.content;
   return typeof text === "string" && text.trim() ? text.trim() : null;
@@ -203,15 +180,13 @@ async function callDeepSeek(
 async function callYandex(
   apiKey: string,
   systemPrompt: string,
-  userPrompt: string,
-  textLength: number
+  userPrompt: string
 ): Promise<string | null> {
   const folderId = (await AsyncStorage.getItem(YANDEX_FOLDER_ID_KEY))?.trim();
   if (!folderId) {
     throw new Error("Не указан FolderID для YandexGPT. Заполни его в настройках.");
   }
   const url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion";
-  console.log("AI request:", { provider: "yandex", url, textLength });
   const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: {
@@ -231,13 +206,10 @@ async function callYandex(
       ],
     }),
   });
-  console.log("AI response status:", res.status);
   if (res.status === 401 || res.status === 403) return "AUTH_ERROR";
   const data = await res.json().catch((e) => ({ _parseError: e.message }));
-  console.log("AI response body:", JSON.stringify(data));
   if (!res.ok) {
-    const errText = JSON.stringify(data);
-    throw new Error(`HTTP ${res.status}: ${errText}`);
+    throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
   }
   const text = data?.result?.alternatives?.[0]?.message?.text;
   return typeof text === "string" && text.trim() ? text.trim() : null;
@@ -264,23 +236,24 @@ export async function summarizeContent(
 
   try {
     if (provider === "gemini") {
-      return await callGemini(apiKey, systemPrompt, userPrompt, text.length);
+      return await callGemini(apiKey, systemPrompt, userPrompt);
     }
     if (provider === "claude") {
-      return await callClaude(apiKey, systemPrompt, userPrompt, text.length);
+      return await callClaude(apiKey, systemPrompt, userPrompt);
     }
     if (provider === "openai") {
-      return await callOpenAI(apiKey, systemPrompt, userPrompt, text.length);
+      return await callOpenAI(apiKey, systemPrompt, userPrompt);
     }
     if (provider === "deepseek") {
-      return await callDeepSeek(apiKey, systemPrompt, userPrompt, text.length);
+      return await callDeepSeek(apiKey, systemPrompt, userPrompt);
     }
     if (provider === "yandex") {
-      return await callYandex(apiKey, systemPrompt, userPrompt, text.length);
+      return await callYandex(apiKey, systemPrompt, userPrompt);
     }
     return null;
   } catch (error: any) {
-    console.error("AI error:", error);
-    throw new Error(error?.message || JSON.stringify(error));
+    const msg = typeof error?.message === "string" ? error.message : "AI request failed";
+    console.error("AI error:", msg);
+    throw new Error(msg);
   }
 }

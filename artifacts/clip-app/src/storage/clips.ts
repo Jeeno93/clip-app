@@ -56,6 +56,14 @@ function generateId(): string {
   return Date.now().toString() + Math.random().toString(36).substr(2, 9);
 }
 
+function todayKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function yesterdayKey(): string {
+  return new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+}
+
 export async function getAllClips(): Promise<Clip[]> {
   try {
     const raw = await AsyncStorage.getItem(CLIPS_KEY);
@@ -104,7 +112,8 @@ export async function getDailyCards(): Promise<Clip[]> {
   const clips = await getAllClips();
   if (clips.length === 0) return [];
 
-  const today = new Date().toDateString();
+  const today = todayKey();
+  const target = Math.min(3, clips.length);
   const savedDate = await AsyncStorage.getItem(DAILY_DATE_KEY);
   const savedIds = await AsyncStorage.getItem(DAILY_CARDS_KEY);
 
@@ -113,11 +122,25 @@ export async function getDailyCards(): Promise<Clip[]> {
     const found = ids
       .map((id) => clips.find((c) => c.id === id))
       .filter(Boolean) as Clip[];
-    if (found.length > 0) return found;
+
+    if (found.length === target) return found;
+
+    if (found.length > 0 && found.length < target) {
+      const usedIds = new Set(found.map((c) => c.id));
+      const pool = clips.filter((c) => !usedIds.has(c.id));
+      const shuffledPool = pool.sort(() => Math.random() - 0.5);
+      const refill = shuffledPool.slice(0, target - found.length);
+      const merged = [...found, ...refill];
+      await AsyncStorage.setItem(
+        DAILY_CARDS_KEY,
+        JSON.stringify(merged.map((c) => c.id))
+      );
+      return merged;
+    }
   }
 
   const shuffled = [...clips].sort(() => Math.random() - 0.5);
-  const selected = shuffled.slice(0, Math.min(3, clips.length));
+  const selected = shuffled.slice(0, target);
   const selectedIds = selected.map((c) => c.id);
   await AsyncStorage.setItem(DAILY_DATE_KEY, today);
   await AsyncStorage.setItem(DAILY_CARDS_KEY, JSON.stringify(selectedIds));
@@ -140,7 +163,7 @@ export async function getAllTags(): Promise<string[]> {
 async function updateStreak(): Promise<void> {
   try {
     const raw = await AsyncStorage.getItem(STREAK_KEY);
-    const today = new Date().toDateString();
+    const today = todayKey();
     let streak: Streak = { count: 0, lastDate: "" };
 
     if (raw) {
@@ -151,9 +174,7 @@ async function updateStreak(): Promise<void> {
       return;
     }
 
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toDateString();
+    const yesterdayStr = yesterdayKey();
 
     if (streak.lastDate === yesterdayStr) {
       streak.count += 1;
@@ -196,16 +217,30 @@ export async function getSettings(): Promise<Settings> {
   try {
     const raw = await AsyncStorage.getItem(SETTINGS_KEY);
     if (!raw) return { ...DEFAULT_SETTINGS };
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    const saved = JSON.parse(raw);
+    return {
+      ...DEFAULT_SETTINGS,
+      ...saved,
+      aiModules: {
+        ...DEFAULT_SETTINGS.aiModules,
+        ...(saved.aiModules ?? {}),
+      },
+    };
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
 }
 
+let saveQueue: Promise<void> = Promise.resolve();
+
 export async function saveSettings(s: Partial<Settings>): Promise<void> {
-  const current = await getSettings();
-  await AsyncStorage.setItem(
-    SETTINGS_KEY,
-    JSON.stringify({ ...current, ...s })
-  );
+  const next = saveQueue.then(async () => {
+    const current = await getSettings();
+    await AsyncStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({ ...current, ...s })
+    );
+  });
+  saveQueue = next.catch(() => {});
+  return next;
 }

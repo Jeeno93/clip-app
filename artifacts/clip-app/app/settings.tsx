@@ -171,12 +171,6 @@ export default function SettingsScreen() {
         await AsyncStorage.removeItem(YANDEX_FOLDER_ID_KEY);
       }
     }
-    const verify = await getSettings();
-    console.log("Saved API key:", {
-      provider: verify.aiProvider,
-      keyLength: verify.aiApiKey?.length ?? 0,
-      keyPreview: verify.aiApiKey?.slice(0, 10) + "...",
-    });
     setKeyJustSaved(true);
   };
 
