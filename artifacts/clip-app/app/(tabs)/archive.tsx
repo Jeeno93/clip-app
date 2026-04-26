@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { router } from "expo-router";
-import React, { useMemo, useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -17,15 +17,34 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
 import ClipCard from "../../src/components/ClipCard";
+import CreateDomainModal from "../../src/components/CreateDomainModal";
+import Sidebar, { ActiveDomain } from "../../src/components/Sidebar";
 import { useClips } from "../../src/context/ClipsContext";
 import { clipsCount } from "../../src/utils/pluralize";
 
 export default function ArchiveScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { clips, allTags, removeClip } = useClips();
+  const { clips, allTags, removeClip, domains } = useClips();
   const [search, setSearch] = useState("");
   const [activeTags, setActiveTags] = useState<string[]>([]);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeDomainId, setActiveDomainId] = useState<ActiveDomain>("all");
+  const [createDomainOpen, setCreateDomainOpen] = useState(false);
+
+  // Honour deeplink ?domain=inbox|all|<id> from Home etc.
+  // We only consume the param ONCE per distinct value — otherwise re-focusing
+  // the tab would override a manual selection by the user.
+  const params = useLocalSearchParams<{ domain?: string }>();
+  const lastAppliedParamRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const d = params.domain;
+    if (!d || d === lastAppliedParamRef.current) return;
+    lastAppliedParamRef.current = d;
+    if (d === "inbox") setActiveDomainId(null);
+    else if (d === "all") setActiveDomainId("all");
+    else setActiveDomainId(d);
+  }, [params.domain]);
 
   const topPad = Platform.OS === "web" ? insets.top + 67 : insets.top;
 
@@ -38,8 +57,15 @@ export default function ArchiveScreen() {
 
   const filtered = useMemo(() => {
     let result = clips;
+
+    // Domain filter (always applied first).
+    if (activeDomainId === null) {
+      result = result.filter((c) => !c.domainId);
+    } else if (activeDomainId !== "all") {
+      result = result.filter((c) => c.domainId === activeDomainId);
+    }
+
     if (activeTags.length > 0) {
-      // Intersection: clip must contain ALL selected tags
       result = result.filter((c) =>
         activeTags.every((t) => c.tags.includes(t))
       );
@@ -54,9 +80,23 @@ export default function ArchiveScreen() {
       );
     }
     return result;
-  }, [clips, search, activeTags]);
+  }, [clips, search, activeTags, activeDomainId]);
 
   const hasActiveFilter = search.trim().length > 0 || activeTags.length > 0;
+
+  const totalForDomain = useMemo(() => {
+    if (activeDomainId === "all") return clips.length;
+    if (activeDomainId === null) return clips.filter((c) => !c.domainId).length;
+    return clips.filter((c) => c.domainId === activeDomainId).length;
+  }, [clips, activeDomainId]);
+
+  const headerTitle = useMemo(() => {
+    if (activeDomainId === "all") return "Твоя база знаний";
+    if (activeDomainId === null) return "📥 Входящие";
+    const d = domains.find((x) => x.id === activeDomainId);
+    if (!d) return "Твоя база знаний";
+    return `${d.icon || "📁"} ${d.name}`;
+  }, [activeDomainId, domains]);
 
   const handleDelete = (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -90,10 +130,21 @@ export default function ArchiveScreen() {
     titleRow: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between",
+      gap: 12,
+    },
+    menuBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 8,
+      alignItems: "center",
+      justifyContent: "center",
+      marginLeft: -8,
+    },
+    titleCol: {
+      flex: 1,
     },
     title: {
-      fontSize: 22,
+      fontSize: 20,
       fontFamily: "Inter_700Bold",
       color: colors.foreground,
     },
@@ -162,12 +213,26 @@ export default function ArchiveScreen() {
     <View style={s.container}>
       <View style={s.header}>
         <View style={s.titleRow}>
-          <Text style={s.title}>Твоя база знаний</Text>
-          <Text style={s.count}>
-            {hasActiveFilter
-              ? `${filtered.length} из ${clipsCount(clips.length)}`
-              : clipsCount(clips.length)}
-          </Text>
+          <TouchableOpacity
+            style={s.menuBtn}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setSidebarOpen(true);
+            }}
+            hitSlop={8}
+          >
+            <Feather name="menu" size={22} color={colors.foreground} />
+          </TouchableOpacity>
+          <View style={s.titleCol}>
+            <Text style={s.title} numberOfLines={1}>
+              {headerTitle}
+            </Text>
+            <Text style={s.count}>
+              {hasActiveFilter
+                ? `${filtered.length} из ${clipsCount(totalForDomain)}`
+                : clipsCount(totalForDomain)}
+            </Text>
+          </View>
         </View>
         <View style={s.searchRow}>
           <Feather name="search" size={16} color={colors.textMuted} />
@@ -266,6 +331,26 @@ export default function ArchiveScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
+
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        activeDomainId={activeDomainId}
+        onSelectDomain={(id) => {
+          setActiveDomainId(id);
+          setSidebarOpen(false);
+        }}
+        onCreateDomain={() => {
+          setSidebarOpen(false);
+          setCreateDomainOpen(true);
+        }}
+      />
+
+      <CreateDomainModal
+        visible={createDomainOpen}
+        onClose={() => setCreateDomainOpen(false)}
+        onCreated={(d) => setActiveDomainId(d.id)}
+      />
     </View>
   );
 }

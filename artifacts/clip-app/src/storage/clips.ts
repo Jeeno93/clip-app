@@ -5,6 +5,7 @@ const STREAK_KEY = "@clip:streak";
 const SETTINGS_KEY = "@clip:settings";
 const DAILY_CARDS_KEY = "@clip:daily_cards";
 const DAILY_DATE_KEY = "@clip:daily_date";
+const DOMAINS_KEY = "@clip:domains";
 
 export const FREE_LIMIT = 100;
 
@@ -16,6 +17,7 @@ export interface Clip {
   source: string;
   tags: string[];
   createdAt: string;
+  domainId?: string; // null/undefined = Inbox (Входящие)
   linkPreview?: {
     title: string;
     description: string | null;
@@ -24,6 +26,13 @@ export interface Clip {
     fullText?: string;
   };
   summary?: string;
+}
+
+export interface Domain {
+  id: string;
+  name: string;
+  icon: string; // emoji
+  createdAt: string;
 }
 
 export type AiProvider = "gemini" | "claude" | "openai" | "deepseek" | "yandex";
@@ -291,6 +300,86 @@ export async function getSettings(): Promise<Settings> {
     return { ...DEFAULT_SETTINGS, aiKeys: { ...DEFAULT_AI_KEYS } };
   }
 }
+
+// ─────────────────────────── Domains ───────────────────────────
+
+export async function getAllDomains(): Promise<Domain[]> {
+  try {
+    const raw = await AsyncStorage.getItem(DOMAINS_KEY);
+    if (!raw) return [];
+    const domains: Domain[] = JSON.parse(raw);
+    // Sort by createdAt asc (oldest first — stable order for sidebar)
+    return domains.sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+  } catch {
+    return [];
+  }
+}
+
+export async function saveDomain(
+  domain: Omit<Domain, "id" | "createdAt">
+): Promise<Domain> {
+  const domains = await getAllDomains();
+  const newDomain: Domain = {
+    ...domain,
+    id: generateId(),
+    createdAt: new Date().toISOString(),
+  };
+  domains.push(newDomain);
+  await AsyncStorage.setItem(DOMAINS_KEY, JSON.stringify(domains));
+  return newDomain;
+}
+
+export async function deleteDomain(id: string): Promise<void> {
+  const domains = await getAllDomains();
+  const filtered = domains.filter((d) => d.id !== id);
+  await AsyncStorage.setItem(DOMAINS_KEY, JSON.stringify(filtered));
+
+  // Detach all clips from the deleted domain → they go back to Inbox.
+  const clips = await getAllClips();
+  const updated = clips.map((c) =>
+    c.domainId === id ? { ...c, domainId: undefined } : c
+  );
+  await AsyncStorage.setItem(CLIPS_KEY, JSON.stringify(updated));
+}
+
+export async function updateDomain(
+  id: string,
+  changes: Partial<Domain>
+): Promise<void> {
+  const domains = await getAllDomains();
+  const updated = domains.map((d) => (d.id === id ? { ...d, ...changes } : d));
+  await AsyncStorage.setItem(DOMAINS_KEY, JSON.stringify(updated));
+}
+
+export async function moveClipToDomain(
+  clipId: string,
+  domainId: string | null
+): Promise<void> {
+  // null → back to Inbox; remove the field so JSON.stringify drops it.
+  await updateClip(clipId, {
+    domainId: domainId === null ? undefined : domainId,
+  });
+}
+
+export async function getInboxClips(): Promise<Clip[]> {
+  const clips = await getAllClips();
+  return clips.filter((c) => !c.domainId);
+}
+
+export async function getDomainClips(domainId: string): Promise<Clip[]> {
+  const clips = await getAllClips();
+  return clips.filter((c) => c.domainId === domainId);
+}
+
+export async function getInboxCount(): Promise<number> {
+  const clips = await getAllClips();
+  return clips.filter((c) => !c.domainId).length;
+}
+
+// ───────────────────────────────────────────────────────────────
 
 let saveQueue: Promise<void> = Promise.resolve();
 

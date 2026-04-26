@@ -7,15 +7,19 @@ import React, {
 } from "react";
 import {
   Clip,
+  Domain,
   FREE_LIMIT,
   Streak,
   deleteClip,
+  deleteDomain,
   getAllClips,
+  getAllDomains,
   getAllTags,
   getDailyCards,
-  getRandomClip,
   getStreak,
+  moveClipToDomain,
   saveClip,
+  saveDomain,
   updateClip,
 } from "../storage/clips";
 
@@ -26,6 +30,8 @@ interface ClipsContextType {
   streak: Streak;
   loading: boolean;
   reachedLimit: boolean;
+  domains: Domain[];
+  inboxCount: number;
   addClip: (
     text: string,
     tags: string[],
@@ -41,6 +47,10 @@ interface ClipsContextType {
   getRandomOne: () => Clip | null;
   refreshDailyCards: () => Promise<void>;
   refresh: () => Promise<void>;
+  createDomain: (data: Omit<Domain, "id" | "createdAt">) => Promise<Domain>;
+  removeDomain: (id: string) => Promise<void>;
+  moveClip: (clipId: string, domainId: string | null) => Promise<void>;
+  refreshDomains: () => Promise<void>;
 }
 
 const ClipsContext = createContext<ClipsContextType | null>(null);
@@ -50,21 +60,24 @@ export function ClipsProvider({ children }: { children: React.ReactNode }) {
   const [dailyCards, setDailyCards] = useState<Clip[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
   const [streak, setStreak] = useState<Streak>({ count: 0, lastDate: "" });
+  const [domains, setDomains] = useState<Domain[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [c, dc, tags, st] = await Promise.all([
+      const [c, dc, tags, st, dms] = await Promise.all([
         getAllClips(),
         getDailyCards(),
         getAllTags(),
         getStreak(),
+        getAllDomains(),
       ]);
       setClips(c);
       setDailyCards(dc);
       setAllTags(tags);
       setStreak(st);
+      setDomains(dms);
     } finally {
       setLoading(false);
     }
@@ -145,6 +158,38 @@ export function ClipsProvider({ children }: { children: React.ReactNode }) {
     setDailyCards(dc);
   }, []);
 
+  const refreshDomains = useCallback(async () => {
+    const dms = await getAllDomains();
+    setDomains(dms);
+  }, []);
+
+  const createDomain = useCallback(
+    async (data: Omit<Domain, "id" | "createdAt">): Promise<Domain> => {
+      const created = await saveDomain(data);
+      await refreshDomains();
+      return created;
+    },
+    [refreshDomains]
+  );
+
+  const removeDomain = useCallback(
+    async (id: string) => {
+      await deleteDomain(id);
+      await loadAll();
+    },
+    [loadAll]
+  );
+
+  const moveClip = useCallback(
+    async (clipId: string, domainId: string | null) => {
+      await moveClipToDomain(clipId, domainId);
+      await loadAll();
+    },
+    [loadAll]
+  );
+
+  const inboxCount = clips.filter((c) => !c.domainId).length;
+
   return (
     <ClipsContext.Provider
       value={{
@@ -154,6 +199,8 @@ export function ClipsProvider({ children }: { children: React.ReactNode }) {
         streak,
         loading,
         reachedLimit: clips.length >= FREE_LIMIT,
+        domains,
+        inboxCount,
         addClip,
         removeClip,
         editClipTags,
@@ -162,6 +209,10 @@ export function ClipsProvider({ children }: { children: React.ReactNode }) {
         getRandomOne,
         refreshDailyCards,
         refresh: loadAll,
+        createDomain,
+        removeDomain,
+        moveClip,
+        refreshDomains,
       }}
     >
       {children}

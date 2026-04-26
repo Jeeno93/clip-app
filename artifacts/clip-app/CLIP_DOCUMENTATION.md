@@ -181,6 +181,7 @@ interface Clip {
   source: string;                // "manual" | "screenshot" | "link" | "voice" | значение из share-intent
   tags: string[];
   createdAt: string;             // ISO-строка
+  domainId?: string;             // если не задан → клип во «Входящих»
   linkPreview?: {
     title: string;
     description: string | null;
@@ -194,6 +195,22 @@ interface Clip {
 
 - `title?` — отображается в `ClipCard` (semibold 13px), на детальном экране (bold 22px), участвует в поиске архива.
 - `source = "voice"` ставится автоматически, если на экране добавления была нажата кнопка микрофона.
+- `domainId?` — ссылка на `Domain.id`. Отсутствие или `undefined` означает, что клип лежит во **Входящих**. Подробнее см. раздел «Домены знаний».
+
+### Domain
+
+Папка для группировки идей по теме (`src/storage/clips.ts`):
+
+```ts
+interface Domain {
+  id: string;          // авто-генерируемый
+  name: string;        // название, до 30 символов
+  icon: string;        // одна emoji-иконка
+  createdAt: string;   // ISO-строка
+}
+```
+
+Хранится отдельно от настроек под ключом **`@clip:domains`** для производительности (список настроек меняется иначе, чем список доменов).
 
 ### Settings
 
@@ -357,6 +374,76 @@ interface Streak {
 - `zod`, `zod-validation-error` — валидация
 - `@tanstack/react-query` — кэш HTTP-запросов
 - `@workspace/api-client-react` — типизированный клиент к `@workspace/api-server` (общий монорепо-пакет)
+
+## Домены знаний
+
+Карточки можно раскладывать по тематическим **доменам** (например, «🤖 AI и технологии», «📦 Продукт»). Карточка без домена считается лежащей во **Входящих** (`📥 Входящие`) — это «инбокс на разбор».
+
+### Хранилище
+
+- Ключ AsyncStorage: **`@clip:domains`** (массив `Domain[]`, отдельно от `@clip:settings`).
+- Поле в клипе: **`Clip.domainId?: string`**. `undefined` или отсутствие поля = «Входящие».
+
+### API в `src/storage/clips.ts`
+
+| Функция | Назначение |
+|---------|------------|
+| `getAllDomains()` | Все домены, отсортированы по `createdAt` (старые сверху). |
+| `saveDomain({ name, icon })` | Создаёт домен с авто-`id`/`createdAt`, возвращает его. |
+| `updateDomain(id, changes)` | Частичное обновление домена. |
+| `deleteDomain(id)` | Удаляет домен **и автоматически возвращает** все его клипы во Входящие (`domainId` стирается). |
+| `moveClipToDomain(clipId, domainId \| null)` | Переносит клип в домен; `null` → во Входящие. |
+| `getInboxClips()` | Клипы без `domainId`. |
+| `getDomainClips(domainId)` | Клипы конкретного домена. |
+| `getInboxCount()` | Количество клипов во Входящих. |
+
+### `ClipsContext`
+
+Контекст подгружает домены вместе с остальной базой и выставляет:
+
+| Поле / метод | Описание |
+|--------------|----------|
+| `domains: Domain[]` | Все домены пользователя. |
+| `inboxCount: number` | Производное от `clips` — `clips.filter(c => !c.domainId).length`. |
+| `createDomain(data)` | Создание домена + локальный `refreshDomains`. |
+| `removeDomain(id)` | Удаление домена + перезагрузка всего стейта (клипы получают `domainId = undefined`). |
+| `moveClip(clipId, domainId \| null)` | Перенос клипа + перезагрузка стейта (счётчик Входящих и список фильтрации обновляются). |
+| `refreshDomains()` | Точечное обновление списка доменов. |
+
+### UI
+
+- **Боковое меню** (`src/components/Sidebar.tsx`) — выезжает слева через `Modal` + `Animated.View` (translateX `-300 → 0`, 250ms). Ширина — 72% экрана, максимум 300. Полупрозрачный overlay (rgba 0,0,0,0.5) закрывает меню по тапу; меню также закрывается свайпом влево (`PanResponder`, порог 50px). Содержимое:
+  - заголовок `✦ Clip` (янтарный);
+  - `📥 Входящие` со счётчиком справа (рендерится только если `inboxCount > 0`);
+  - `📚 Все идеи`;
+  - подзаголовок `МОИ ДОМЕНЫ`;
+  - список доменов (`icon + name`);
+  - кнопка `+ Новый домен` (янтарная).
+  - Активный пункт: фон `accentSubtle`, текст `accent`, левая полоса `accent` 3px.
+
+- **Архив** (`app/(tabs)/archive.tsx`):
+  - В шапке появилась кнопка-гамбургер ☰ слева — открывает Sidebar.
+  - Стейт `activeDomainId: string | null | "all"` управляет фильтром:
+    - `"all"` — все клипы (заголовок `Твоя база знаний`);
+    - `null` — только Входящие (заголовок `📥 Входящие`);
+    - `string` — конкретный домен (заголовок `<icon> <name>`).
+  - Подзаголовок-счётчик показывает количество в текущем фильтре, а не во всём архиве.
+  - Поддерживается deeplink-параметр `?domain=inbox|all|<id>` (использует `useFocusEffect` + `useLocalSearchParams`) — экран Home кидает сюда `?domain=inbox` по тапу на инбокс.
+  - Снизу смонтированы `Sidebar` и `CreateDomainModal`. Создание нового домена из меню сразу делает его активным фильтром.
+
+- **Создание домена** (`src/components/CreateDomainModal.tsx`) — bottom-sheet `Modal animationType="slide"`. Внутри:
+  - заголовок «Новый домен» + ссылка «Отмена»;
+  - горизонтальный скролл из 15 эмодзи: `🤖 📦 🧠 📚 💡 🎯 🔬 💼 🌍 🎨 ✍️ 🏗️ 📊 🎵 ❤️`. Активная подсвечивается янтарной обводкой и `accentSubtle` фоном;
+  - `TextInput` с `maxLength={30}`, плейсхолдер «Название домена…», `autoFocus`;
+  - янтарная кнопка «Создать» (disabled, если имя пустое); тап вызывает `createDomain({ name, icon })`.
+
+- **Перемещение карточки** (`src/components/DomainPickerModal.tsx`) — bottom-sheet, открывается с детального экрана клипа из новой строки `ДОМЕН [📥 Входящие ▾]` в блоке метаданных. Внутри:
+  - `📥 Входящие` (✓ если `clip.domainId` пустой);
+  - все домены (✓ у текущего);
+  - разделитель + `+ Создать домен` (открывает `CreateDomainModal`; после создания клип сразу переносится в новый домен).
+  - Выбор вызывает `moveClip(clip.id, id)`, после чего весь стейт перегружается и UI обновляется без ручного `refresh`.
+
+- **Главный экран** (`app/(tabs)/index.tsx`) — под streak'ом, если `inboxCount > 0`, отдельной строкой: `📥 N неразобранных` (textMuted, число — `accent`). Тап делает `router.push({ pathname: "/(tabs)/archive", params: { domain: "inbox" } })`.
 
 **Инструменты:**
 - TypeScript `~5.9.2`, `tsc --noEmit` для проверки типов

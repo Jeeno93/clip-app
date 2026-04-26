@@ -20,6 +20,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
+import CreateDomainModal from "../../src/components/CreateDomainModal";
+import DomainPickerModal from "../../src/components/DomainPickerModal";
 import TagPicker from "../../src/components/TagPicker";
 import { useClips } from "../../src/context/ClipsContext";
 import { getSettings, Settings } from "../../src/storage/clips";
@@ -53,7 +55,11 @@ export default function ClipDetailScreen() {
     editClipTags,
     editClipText,
     editClipSummary,
+    domains,
+    moveClip,
   } = useClips();
+  const [domainPickerOpen, setDomainPickerOpen] = useState(false);
+  const [createDomainOpen, setCreateDomainOpen] = useState(false);
 
   const clip = useMemo(() => clips.find((c) => c.id === id), [clips, id]);
 
@@ -449,6 +455,25 @@ export default function ClipDetailScreen() {
       color: colors.textSecondary,
       flex: 1,
     },
+    domainPickBtn: {
+      flex: 1,
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.bgInput,
+      alignSelf: "flex-start",
+    },
+    domainPickText: {
+      fontSize: 14,
+      fontFamily: "Inter_500Medium",
+      color: colors.foreground,
+    },
+    domainPickChevron: {
+      color: colors.textMuted,
+      fontSize: 12,
+    },
     divider: {
       height: 1,
       backgroundColor: colors.border,
@@ -747,6 +772,41 @@ export default function ClipDetailScreen() {
 
         <View style={s.metaSection}>
           <View style={s.metaRow}>
+            <Text style={s.metaLabel}>Домен</Text>
+            <TouchableOpacity
+              style={s.domainPickBtn}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setDomainPickerOpen(true);
+              }}
+              activeOpacity={0.7}
+            >
+              {(() => {
+                // Three states: no domainId → Inbox; domainId points to an
+                // existing domain → that domain; domainId is set but the
+                // domain was deleted → orphaned label so the user can fix it.
+                let icon = "📥";
+                let name = "Входящие";
+                if (clip.domainId) {
+                  const d = domains.find((x) => x.id === clip.domainId);
+                  if (d) {
+                    icon = d.icon || "📁";
+                    name = d.name;
+                  } else {
+                    icon = "⚠️";
+                    name = "Удалённый домен";
+                  }
+                }
+                return (
+                  <Text style={s.domainPickText}>
+                    {icon} {name} {"  "}
+                    <Text style={s.domainPickChevron}>▾</Text>
+                  </Text>
+                );
+              })()}
+            </TouchableOpacity>
+          </View>
+          <View style={s.metaRow}>
             <Text style={s.metaLabel}>Источник</Text>
             <Text style={s.metaValue}>
               {clip.source === "manual" ? "Вручную" : clip.source}
@@ -883,6 +943,25 @@ export default function ClipDetailScreen() {
         </TouchableOpacity>
       </ScrollView>
       </KeyboardAvoidingView>
+
+      <DomainPickerModal
+        visible={domainPickerOpen}
+        onClose={() => setDomainPickerOpen(false)}
+        currentDomainId={clip.domainId}
+        onSelect={async (id) => {
+          await moveClip(clip.id, id);
+        }}
+        onCreateNew={() => setCreateDomainOpen(true)}
+      />
+
+      <CreateDomainModal
+        visible={createDomainOpen}
+        onClose={() => setCreateDomainOpen(false)}
+        onCreated={(d) => {
+          // Move the clip into the just-created domain right away.
+          moveClip(clip.id, d.id);
+        }}
+      />
     </View>
   );
 }

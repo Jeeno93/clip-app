@@ -1,0 +1,186 @@
+Добавь систему организации знаний в Clip.
+Архитектура: Входящие + Домены знаний + боковое меню.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 1 — Storage (src/storage/clips.ts)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Добавь тип Domain:
+```typescript
+interface Domain {
+  id: string;        // auto-generated
+  name: string;      // название домена
+  icon: string;      // эмодзи иконка
+  createdAt: string; // ISO строка
+}
+```
+
+Добавь поле в Clip:
+  domainId?: string  // null = Входящие
+
+Добавь в Settings:
+  domains: Domain[]  // список доменов пользователя
+
+DEFAULT_SETTINGS:
+  domains: []
+
+AsyncStorage ключ: @clip:domains (отдельно от settings
+для производительности)
+
+Новые функции:
+  getAllDomains(): Promise<Domain[]>
+  saveDomain(domain: Omit<Domain, 'id' | 'createdAt'>): Promise<Domain>
+  deleteDomain(id: string): Promise<void>
+  updateDomain(id: string, changes: Partial<Domain>): Promise<void>
+  moveClipToDomain(clipId: string, domainId: string | null): Promise<void>
+  getInboxClips(): Promise<Clip[]>  // domainId === undefined || null
+  getDomainClips(domainId: string): Promise<Clip[]>
+  getInboxCount(): Promise<number>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 2 — Боковое меню (src/components/Sidebar.tsx)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Создай новый компонент Sidebar — выдвигается слева
+через Animated.View + TouchableOpacity overlay.
+
+Состояние управляется через пропсы:
+  isOpen: boolean
+  onClose: () => void
+  activeDomainId: string | null  // null = Входящие, 'all' = Все
+  onSelectDomain: (id: string | null | 'all') => void
+  onCreateDomain: () => void
+
+Структура меню:
+┌─────────────────────┐
+│ ✦ Clip              │  ← название приложения, янтарный
+│                     │
+│ 📥 Входящие    [12] │  ← счётчик неразобранных янтарный
+│ 📚 Все идеи         │
+│                     │
+│ МОИ ДОМЕНЫ          │  ← label textMuted uppercase
+│ 🤖 AI и технологии  │
+│ 📦 Продукт          │
+│ 🧠 Психология       │
+│                     │
+│ + Новый домен       │  ← янтарный текст
+└─────────────────────┘
+
+Стили:
+- Ширина: 72% экрана, максимум 300px
+- Фон: bgCard (#181818)
+- Граница справа: border (#2A2A2A) 1px
+- Overlay: rgba(0,0,0,0.5)
+- Анимация: translateX от -300 до 0, duration 250ms
+- Активный пункт: фон accentSubtle, текст accent, 
+  левая полоса accent 3px
+- Неактивный: textSecondary
+
+Свайп для закрытия: если пользователь свайпает 
+влево на overlay — закрыть боковое меню.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 3 — Обновить ArchiveScreen 
+(app/(tabs)/archive.tsx)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Добавь стейт:
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [activeDomainId, setActiveDomainId] = useState
+    string | null | 'all'
+  >('all')
+
+Добавь кнопку-гамбургер ☰ слева в шапке архива:
+  При нажатии → setSidebarOpen(true)
+  Рядом с гамбургером если activeDomainId !== 'all' —
+  показывать название активного домена или "Входящие"
+
+Логика фильтрации списка:
+  'all' → показывать все карточки (текущее поведение)
+  null → показывать только Входящие (domainId === null/undefined)
+  string → показывать карточки конкретного домена
+
+Заголовок экрана меняется динамически:
+  'all' → "Твоя база знаний"
+  null → "📥 Входящие"
+  string → icon + название домена
+
+Добавь Sidebar компонент внизу экрана (поверх всего):
+  <Sidebar
+    isOpen={sidebarOpen}
+    onClose={() => setSidebarOpen(false)}
+    activeDomainId={activeDomainId}
+    onSelectDomain={(id) => {
+      setActiveDomainId(id)
+      setSidebarOpen(false)
+    }}
+    onCreateDomain={() => {
+      setSidebarOpen(false)
+      // открыть модал создания домена
+    }}
+  />
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 4 — Модал создания домена
+(src/components/CreateDomainModal.tsx)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Modal снизу (как AddClipScreen).
+
+Содержимое:
+- Заголовок "Новый домен"
+- Выбор иконки — горизонтальный скролл эмодзи:
+  🤖 📦 🧠 📚 💡 🎯 🔬 💼 🌍 🎨 ✍️ 🏗️ 📊 🎵 ❤️
+  При выборе — подсвечивается янтарным кругом
+- TextInput для названия домена
+  placeholder: "Название домена..."
+  maxLength: 30
+- Кнопка "Создать" янтарная → saveDomain({ name, icon })
+- Кнопка "Отмена"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 5 — Перемещение карточки в домен
+(app/clip/[id].tsx)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+В ClipDetailScreen добавь секцию "Домен" в метаданные:
+
+ДОМЕН    [📥 Входящие ▾]
+
+При нажатии — показать ActionSheet или Modal
+со списком всех доменов + "Входящие":
+  📥 Входящие
+  🤖 AI и технологии  ✓ (если текущий)
+  📦 Продукт
+  + Создать домен
+
+При выборе → moveClipToDomain(clip.id, selectedDomainId)
+Обновить отображение сразу без перезагрузки.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 6 — Счётчик входящих на главном экране
+(app/(tabs)/index.tsx)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Если inboxCount > 0 — показывать под streak строку:
+  "📥 12 неразобранных" 
+  textMuted, fontSize xs
+  При нажатии → переход в архив с фильтром Входящие
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 7 — ClipsContext 
+(src/context/ClipsContext.tsx)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Добавь в контекст:
+  domains: Domain[]
+  inboxCount: number
+  createDomain(data): Promise<Domain>
+  removeDomain(id): Promise<void>
+  moveClip(clipId, domainId): Promise<void>
+  refreshDomains(): Promise<void>
+
+Загружать домены при инициализации вместе с clips.
+
+Больше ничего не меняй.
+После выполнения обнови CLIP_DOCUMENTATION.md.

@@ -36,8 +36,16 @@ function formatHeaderDate(): string {
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { clips, dailyCards, streak, loading, reachedLimit, addClip, refresh } =
-    useClips();
+  const {
+    clips,
+    dailyCards,
+    streak,
+    loading,
+    reachedLimit,
+    addClip,
+    refresh,
+    inboxCount,
+  } = useClips();
   const [quickText, setQuickText] = useState("");
   const [adding, setAdding] = useState(false);
   const [surpriseClip, setSurpriseClip] = useState<Clip | null>(null);
@@ -160,6 +168,16 @@ export default function HomeScreen() {
       color: colors.textMuted,
     },
     archiveCountNumber: {
+      color: colors.accent,
+      fontFamily: "Inter_500Medium",
+    },
+    inboxLine: {
+      marginTop: 4,
+      fontSize: 12,
+      fontFamily: "Inter_400Regular",
+      color: colors.textMuted,
+    },
+    inboxNumber: {
       color: colors.accent,
       fontFamily: "Inter_500Medium",
     },
@@ -366,6 +384,22 @@ export default function HomeScreen() {
                 <Text style={s.streakNumber}>{streak.count}</Text>
                 {` ${daysCount(streak.count).split(" ")[1]} подряд`}
               </Text>
+            )}
+            {inboxCount > 0 && (
+              <TouchableOpacity
+                onPress={() =>
+                  router.push({
+                    pathname: "/(tabs)/archive",
+                    params: { domain: "inbox" },
+                  })
+                }
+                hitSlop={4}
+              >
+                <Text style={s.inboxLine}>
+                  📥 <Text style={s.inboxNumber}>{inboxCount}</Text>
+                  {" неразобранных"}
+                </Text>
+              </TouchableOpacity>
             )}
           </View>
           <TouchableOpacity
