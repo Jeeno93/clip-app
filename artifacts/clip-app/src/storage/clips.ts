@@ -20,6 +20,7 @@ export interface Clip {
     description: string | null;
     imageUrl: string | null;
     url: string;
+    fullText?: string;
   };
   summary?: string;
 }

@@ -3,6 +3,7 @@ export interface LinkPreview {
   description: string | null;
   imageUrl: string | null;
   url: string;
+  fullText?: string;
 }
 
 function decodeHtmlEntities(s: string): string {
@@ -62,6 +63,42 @@ function resolveImageUrl(imageUrl: string, pageUrl: string): string {
   }
 }
 
+async function extractFullText(html: string): Promise<string> {
+  // Убираем script, style, nav, header, footer, aside, figure теги
+  // вместе с содержимым
+  let clean = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+    .replace(/<header[\s\S]*?<\/header>/gi, "")
+    .replace(/<footer[\s\S]*?<\/footer>/gi, "")
+    .replace(/<aside[\s\S]*?<\/aside>/gi, "")
+    .replace(/<figure[\s\S]*?<\/figure>/gi, "");
+
+  // Пытаемся найти основной контент по приоритету:
+  // article > main > всё остальное
+  const articleMatch = clean.match(/<article[\s\S]*?<\/article>/i);
+  const mainMatch = clean.match(/<main[\s\S]*?<\/main>/i);
+
+  const contentHtml = articleMatch?.[0] || mainMatch?.[0] || clean;
+
+  // Убираем все оставшиеся HTML теги и нормализуем пробелы
+  const text = contentHtml
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Возвращаем первые 8000 символов (достаточно для анализа,
+  // не перегружаем токены)
+  return text.slice(0, 8000);
+}
+
 export async function fetchLinkPreview(
   url: string
 ): Promise<LinkPreview | null> {
@@ -90,11 +127,14 @@ export async function fetchLinkPreview(
 
     if (!fallbackTitle) return null;
 
+    const fullText = await extractFullText(html);
+
     return {
       title: fallbackTitle,
       description: ogDescription,
       imageUrl: ogImage ? resolveImageUrl(ogImage, url) : null,
       url,
+      fullText,
     };
   } catch {
     return null;

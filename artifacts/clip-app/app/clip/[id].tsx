@@ -164,16 +164,16 @@ export default function ClipDetailScreen() {
   };
 
   const buildAnalysisInput = (): string => {
-    if (clip.linkPreview) {
-      const parts = [
-        clip.linkPreview.title,
-        clip.linkPreview.description ?? "",
-        clip.text ?? "",
-      ];
-      return parts.filter((s) => s.trim().length > 0).join("\n\n");
-    }
-    return clip.text;
+    const text =
+      clip.linkPreview?.fullText ||
+      clip.linkPreview?.description ||
+      clip.text ||
+      "";
+    return text.slice(0, 6000);
   };
+
+  const hasFullText =
+    !!clip.linkPreview?.fullText && clip.linkPreview.fullText.length > 500;
 
   const canAnalyze =
     !!aiSettings?.aiApiKey &&
@@ -494,6 +494,12 @@ export default function ClipDetailScreen() {
       fontSize: 14,
       fontFamily: "Inter_600SemiBold",
     },
+    analyzeQualityText: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontFamily: "Inter_400Regular",
+      textAlign: "center",
+    },
     summaryBlock: {
       backgroundColor: colors.accentSubtle,
       borderWidth: 1,
@@ -783,20 +789,29 @@ export default function ClipDetailScreen() {
             </View>
           </View>
         ) : canAnalyze ? (
-          <TouchableOpacity
-            style={s.analyzeBtn}
-            onPress={handleAnalyze}
-            disabled={analyzing}
-          >
-            {analyzing ? (
-              <>
-                <ActivityIndicator size="small" color={colors.accent} />
-                <Text style={s.analyzeBtnText}>Анализирую...</Text>
-              </>
-            ) : (
-              <Text style={s.analyzeBtnText}>✦ Анализировать</Text>
+          <View style={{ gap: 6 }}>
+            <TouchableOpacity
+              style={s.analyzeBtn}
+              onPress={handleAnalyze}
+              disabled={analyzing}
+            >
+              {analyzing ? (
+                <>
+                  <ActivityIndicator size="small" color={colors.accent} />
+                  <Text style={s.analyzeBtnText}>Анализирую...</Text>
+                </>
+              ) : (
+                <Text style={s.analyzeBtnText}>✦ Анализировать</Text>
+              )}
+            </TouchableOpacity>
+            {clip.linkPreview && (
+              <Text style={s.analyzeQualityText}>
+                {hasFullText
+                  ? "✓ Полный текст статьи загружен"
+                  : "⚠ Только превью — анализ может быть неточным"}
+              </Text>
             )}
-          </TouchableOpacity>
+          </View>
         ) : null}
 
         <TouchableOpacity style={s.deleteBtn} onPress={handleDelete}>

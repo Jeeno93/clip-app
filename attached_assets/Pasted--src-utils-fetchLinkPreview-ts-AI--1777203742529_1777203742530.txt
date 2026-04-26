@@ -1,0 +1,95 @@
+Добавь полное чтение текста статьи в src/utils/fetchLinkPreview.ts
+
+ЗАДАЧА:
+Сейчас для AI анализа используется только og:description (2-3 
+предложения). Нужно вытаскивать полный текст статьи.
+
+ИЗМЕНЕНИЯ:
+
+1. В fetchLinkPreview.ts добавь новую функцию:
+
+async function extractFullText(html: string): Promise<string> {
+  // Убираем script, style, nav, header, footer, aside теги 
+  // вместе с содержимым
+  let clean = html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<nav[\s\S]*?<\/nav>/gi, '')
+    .replace(/<header[\s\S]*?<\/header>/gi, '')
+    .replace(/<footer[\s\S]*?<\/footer>/gi, '')
+    .replace(/<aside[\s\S]*?<\/aside>/gi, '')
+    .replace(/<figure[\s\S]*?<\/figure>/gi, '')
+    
+  // Пытаемся найти основной контент по приоритету:
+  // article > main > div.content > div.post > body
+  const articleMatch = clean.match(/<article[\s\S]*?<\/article>/i)
+  const mainMatch = clean.match(/<main[\s\S]*?<\/main>/i)
+  
+  const contentHtml = articleMatch?.[0] 
+    || mainMatch?.[0] 
+    || clean
+  
+  // Убираем все оставшиеся HTML теги
+  const text = contentHtml
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+  
+  // Возвращаем первые 8000 символов (достаточно для анализа,
+  // не перегружаем токены)
+  return text.slice(0, 8000)
+}
+
+2. В основной функции fetchLinkPreview добавь поле fullText:
+
+// После получения html и извлечения og-тегов:
+const fullText = await extractFullText(html)
+
+// Вернуть в объекте:
+return { 
+  title, 
+  description, 
+  imageUrl, 
+  url,
+  fullText  // новое поле
+}
+
+3. Обнови тип LinkPreview в src/storage/clips.ts:
+Добавь поле: fullText?: string
+
+4. В AddClipScreen (app/add.tsx):
+При сохранении карточки со ссылкой — сохранять 
+linkPreview.fullText в карточку.
+
+5. В src/utils/summarize.ts обнови логику выбора текста 
+для анализа:
+
+// БЫЛО:
+const text = clip.linkPreview.description + ' ' + clip.text
+
+// СТАЛО:
+const text = clip.linkPreview?.fullText 
+  || clip.linkPreview?.description 
+  || clip.text
+  || ''
+
+// Если текст длиннее 6000 символов — обрезать до 6000
+// чтобы не превышать лимиты токенов провайдеров
+const truncatedText = text.slice(0, 6000)
+
+6. В ClipDetailScreen показывай пользователю индикатор 
+качества данных для анализа:
+Если clip.linkPreview?.fullText существует и длиннее 500 символов:
+  Под кнопкой "Анализировать" маленький текст textMuted:
+  "✓ Полный текст статьи загружен"
+Иначе:
+  "⚠ Только превью — анализ может быть неточным"
+
+Больше ничего не меняй. После изменений обнови 
+CLIP_DOCUMENTATION.md.
