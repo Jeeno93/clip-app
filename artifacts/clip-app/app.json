@@ -53,7 +53,8 @@
             "image/*"
           ]
         }
-      ]
+      ],
+      "./plugins/with-versioned-parcelable-fix"
     ],
     "experiments": {
       "typedRoutes": true,
