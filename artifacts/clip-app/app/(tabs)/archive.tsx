@@ -49,6 +49,7 @@ export default function ArchiveScreen() {
       result = result.filter(
         (c) =>
           c.text.toLowerCase().includes(q) ||
+          (c.title?.toLowerCase().includes(q) ?? false) ||
           c.tags.some((t) => t.toLowerCase().includes(q))
       );
     }

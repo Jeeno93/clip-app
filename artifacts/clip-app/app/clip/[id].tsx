@@ -64,6 +64,7 @@ export default function ClipDetailScreen() {
   // Text editing state
   const [editingText, setEditingText] = useState(false);
   const [editedText, setEditedText] = useState("");
+  const [editedTitle, setEditedTitle] = useState("");
   const [savingText, setSavingText] = useState(false);
   const textInputRef = useRef<TextInput>(null);
 
@@ -88,6 +89,7 @@ export default function ClipDetailScreen() {
     if (clip) {
       setEditedTags(clip.tags);
       setEditedText(clip.text);
+      setEditedTitle(clip.title ?? "");
     }
   }, [clip]);
 
@@ -140,18 +142,19 @@ export default function ClipDetailScreen() {
 
   const handleSaveText = async () => {
     const trimmed = editedText.trim();
+    const trimmedTitle = editedTitle.trim();
     if (!trimmed) {
       Alert.alert("Пустой текст", "Текст идеи не может быть пустым.");
       return;
     }
-    if (trimmed === clip.text) {
+    if (trimmed === clip.text && trimmedTitle === (clip.title ?? "")) {
       setEditingText(false);
       return;
     }
     setSavingText(true);
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await editClipText(clip.id, trimmed);
+      await editClipText(clip.id, trimmed, trimmedTitle);
       setEditingText(false);
     } finally {
       setSavingText(false);
@@ -160,6 +163,7 @@ export default function ClipDetailScreen() {
 
   const handleCancelTextEdit = () => {
     setEditedText(clip.text);
+    setEditedTitle(clip.title ?? "");
     setEditingText(false);
   };
 
@@ -381,6 +385,22 @@ export default function ClipDetailScreen() {
       minHeight: 100,
       textAlignVertical: "top",
       backgroundColor: colors.bgInput,
+    },
+    titleInput: {
+      backgroundColor: "transparent",
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      paddingVertical: 8,
+      fontSize: 16,
+      fontFamily: "Inter_600SemiBold",
+      color: colors.foreground,
+      marginBottom: 12,
+    },
+    bigTitle: {
+      fontSize: 22,
+      fontFamily: "Inter_700Bold",
+      color: colors.foreground,
+      marginBottom: 8,
     },
     saveTextBtn: {
       backgroundColor: colors.primary,
@@ -608,6 +628,11 @@ export default function ClipDetailScreen() {
         contentContainerStyle={s.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
+        {/* ── Title (if present) ── */}
+        {clip.title && !editingText ? (
+          <Text style={s.bigTitle}>{clip.title}</Text>
+        ) : null}
+
         {/* ── Image (if present) ── */}
         {clip.imageUri && (
           <Image
@@ -681,6 +706,15 @@ export default function ClipDetailScreen() {
 
             {editingText ? (
               <>
+                <TextInput
+                  style={s.titleInput}
+                  value={editedTitle}
+                  onChangeText={setEditedTitle}
+                  placeholder="Заголовок (необязательно)"
+                  placeholderTextColor={colors.textMuted}
+                  maxLength={100}
+                  autoCorrect={false}
+                />
                 <TextInput
                   ref={textInputRef}
                   style={s.textInput}

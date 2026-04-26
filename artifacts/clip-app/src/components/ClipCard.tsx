@@ -63,6 +63,14 @@ export default function ClipCard({
         style={[styles.accentBar, { backgroundColor: colors.primary }]}
       />
       <View style={styles.content}>
+        {clip.title ? (
+          <Text
+            style={[styles.title, { color: colors.foreground }]}
+            numberOfLines={1}
+          >
+            {clip.title}
+          </Text>
+        ) : null}
         {clip.imageUri ? (
           <Image
             source={{ uri: clip.imageUri }}
@@ -181,6 +189,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     fontFamily: "Inter_400Regular",
+  },
+  title: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    marginBottom: 2,
   },
   image: {
     width: "100%",

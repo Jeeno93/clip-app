@@ -31,11 +31,12 @@ interface ClipsContextType {
     tags: string[],
     source: string,
     imageUri?: string | null,
-    linkPreview?: Clip["linkPreview"]
+    linkPreview?: Clip["linkPreview"],
+    title?: string
   ) => Promise<Clip | null>;
   removeClip: (id: string) => Promise<void>;
   editClipTags: (id: string, tags: string[]) => Promise<void>;
-  editClipText: (id: string, text: string) => Promise<void>;
+  editClipText: (id: string, text: string, title?: string) => Promise<void>;
   editClipSummary: (id: string, summary: string) => Promise<void>;
   getRandomOne: () => Clip | null;
   refreshDailyCards: () => Promise<void>;
@@ -79,7 +80,8 @@ export function ClipsProvider({ children }: { children: React.ReactNode }) {
       tags: string[],
       source: string,
       imageUri: string | null = null,
-      linkPreview?: Clip["linkPreview"]
+      linkPreview?: Clip["linkPreview"],
+      title?: string
     ): Promise<Clip | null> => {
       if (clips.length >= FREE_LIMIT) return null;
       const payload: Omit<Clip, "id" | "createdAt"> = {
@@ -89,6 +91,7 @@ export function ClipsProvider({ children }: { children: React.ReactNode }) {
         imageUri,
       };
       if (linkPreview) payload.linkPreview = linkPreview;
+      if (title && title.length > 0) payload.title = title;
       const clip = await saveClip(payload);
       await loadAll();
       return clip;
@@ -113,8 +116,12 @@ export function ClipsProvider({ children }: { children: React.ReactNode }) {
   );
 
   const editClipText = useCallback(
-    async (id: string, text: string) => {
-      await updateClip(id, { text });
+    async (id: string, text: string, title?: string) => {
+      const changes: Partial<Clip> = { text };
+      if (title !== undefined) {
+        changes.title = title.length > 0 ? title : undefined;
+      }
+      await updateClip(id, changes);
       await loadAll();
     },
     [loadAll]

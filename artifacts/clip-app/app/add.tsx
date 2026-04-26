@@ -41,6 +41,7 @@ export default function AddClipScreen() {
   const hasImage = !!imageUri;
 
   const [text, setText] = useState(params.sharedText ?? "");
+  const [title, setTitle] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -107,12 +108,14 @@ export default function AddClipScreen() {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSaving(true);
+    const trimmedTitle = title.trim();
     const clip = await addClip(
       text.trim(),
       tags,
       source,
       imageUri,
-      linkPreview ?? undefined
+      linkPreview ?? undefined,
+      trimmedTitle.length > 0 ? trimmedTitle : undefined
     );
     setSaving(false);
     if (clip) {
@@ -184,6 +187,16 @@ export default function AddClipScreen() {
       minHeight: 160,
       textAlignVertical: "top",
       lineHeight: 24,
+    },
+    titleInput: {
+      backgroundColor: "transparent",
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      paddingVertical: 8,
+      fontSize: 16,
+      fontFamily: "Inter_600SemiBold",
+      color: colors.foreground,
+      marginBottom: 12,
     },
     textInputCompact: {
       minHeight: 80,
@@ -375,6 +388,15 @@ export default function AddClipScreen() {
               ? "Комментарий"
               : "Идея"}
           </Text>
+          <TextInput
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Заголовок (необязательно)"
+            placeholderTextColor={colors.textMuted}
+            style={s.titleInput}
+            maxLength={100}
+            editable={!reachedLimit}
+          />
           <TextInput
             ref={inputRef}
             value={text}
