@@ -165,3 +165,200 @@ pnpm --filter @workspace/clip-app exec expo run:android
   2. Если сегодня добавлено **1-2** идеи — они показываются вместе со случайными добранными из остального архива до 3 штук. Тоже без фиксации.
   3. Если сегодня **ничего не добавлено** — работает старая логика: 3 случайных из архива, фиксируются на день в `@clip:daily_cards` / `@clip:daily_date`. При возврате сохранённых на сегодня ID проверяется их существование в архиве; если что-то удалено — добираются случайные до целевого количества (`min(3, total)`) и `@clip:daily_cards` обновляется.
 - **Streak** считается по UTC-датам (`new Date().toISOString().slice(0, 10)`), чтобы не зависеть от часового пояса устройства и переездов между ними.
+
+## Структуры данных
+
+### Clip
+
+Интерфейс одной идеи (`src/storage/clips.ts`):
+
+```ts
+interface Clip {
+  id: string;
+  text: string;
+  title?: string;                // необязательный заголовок, до 100 символов
+  imageUri: string | null;       // путь к локальному изображению / скриншоту
+  source: string;                // "manual" | "screenshot" | "link" | "voice" | значение из share-intent
+  tags: string[];
+  createdAt: string;             // ISO-строка
+  linkPreview?: {
+    title: string;
+    description: string | null;
+    imageUrl: string | null;
+    url: string;
+    fullText?: string;           // текст статьи (до 8000 символов) для AI-анализа
+  };
+  summary?: string;              // сохранённый AI-конспект
+}
+```
+
+- `title?` — отображается в `ClipCard` (semibold 13px), на детальном экране (bold 22px), участвует в поиске архива.
+- `source = "voice"` ставится автоматически, если на экране добавления была нажата кнопка микрофона.
+
+### Settings
+
+Хранится в `@clip:settings` (`src/storage/clips.ts`):
+
+```ts
+type AiProvider = "gemini" | "claude" | "openai" | "deepseek" | "yandex";
+type AiDepth    = "quick" | "standard" | "deep";
+type ThemeMode  = "dark" | "light" | "system";
+
+interface AiKeys {
+  gemini:   string | null;
+  claude:   string | null;
+  openai:   string | null;
+  deepseek: string | null;
+  yandex:   string | null;
+}
+
+interface AiModules {
+  keyIdeas:      boolean;   // ВКЛ по умолчанию
+  terms:         boolean;   // ВКЛ по умолчанию
+  aiPerspective: boolean;
+  questions:     boolean;
+  practical:     boolean;
+}
+
+interface Settings {
+  notificationHour: number | null;   // час напоминания (0-23) или null если выкл
+  onboardingDone:   boolean;
+  themeMode:        ThemeMode;
+  aiProvider:       AiProvider | null;
+  aiKeys:           AiKeys;          // ключи всех пяти провайдеров одновременно
+  aiDepth:          AiDepth;
+  aiModules:        AiModules;
+}
+```
+
+**Важно про `aiKeys`:** заменил старое одиночное поле `aiApiKey` (строка). Теперь все ключи всех провайдеров хранятся одновременно — переключение провайдера не стирает ключ предыдущего. Старое поле `aiApiKey` мигрирует в `aiKeys[aiProvider]` при первом чтении настроек и далее отбрасывается.
+
+### Все пять AI-провайдеров
+
+| Ключ | Провайдер | Модель | Где брать ключ |
+|------|-----------|--------|----------------|
+| `deepseek` | DeepSeek | `deepseek-chat` | platform.deepseek.com |
+| `yandex`   | YandexGPT | `yandexgpt-lite` | console.yandex.cloud (+ `@clip:yandex_folder_id`) |
+| `gemini`   | Google Gemini | `gemini-2.0-flash` | aistudio.google.com |
+| `claude`   | Anthropic Claude | `claude-haiku-4-5-20251001` | console.anthropic.com |
+| `openai`   | OpenAI | `gpt-4o-mini` | platform.openai.com |
+
+### Streak
+
+```ts
+interface Streak {
+  count:    number;   // текущий счётчик
+  lastDate: string;   // YYYY-MM-DD (UTC) последнего инкремента
+}
+```
+
+## Экраны
+
+### AddClipScreen (`app/add.tsx`)
+
+Создание новой идеи. Поддерживает источники `manual`, `screenshot`, `link`, `voice`.
+
+- **Заголовок (необязательно)** — компактный input semibold 16px с нижней подчёркивающей линией, лимит 100 символов. Сохраняется в `Clip.title`.
+- **Текст идеи** — multiline textarea, 16px. Если открыт с `?sharedText=...` или со скриншотом, поведение меняется (не автофокусится при картинке).
+- **Кнопка микрофона** (см. раздел «Голосовой ввод») — справа от поля текста, диаметр 48, активируется при нажатии. Реализована через `@react-native-voice/voice`. Требует разрешения `RECORD_AUDIO` на Android и **dev build** (в Expo Go и на вебе кнопка скрыта).
+- **Превью ссылки** — если в тексте URL, асинхронно подгружается `fetchLinkPreview` и показывается карточка с картинкой/заголовком/описанием/доменом.
+- **Превью изображения** — если открыт со `?imageUri=...`.
+- **Теги** — `TagPicker` со всеми существующими тегами + ввод нового.
+- **Источник (badge)** — показывается, если `source !== "manual"`. Приоритет: `screenshot` > `link` > `voice` > переданный из share-intent / `manual`.
+- **Лимит free-версии** — если `clips.length >= FREE_LIMIT (100)`, поля недоступны и показывается красный баннер.
+
+### ClipDetailScreen (`app/clip/[id].tsx`)
+
+Детальный просмотр одной идеи.
+
+- **Заголовок** — крупный (bold 22px) первым элементом, если `clip.title` задан и не в режиме редактирования.
+- **Изображение / превью ссылки** — рендерится после заголовка.
+- **Текст / цитата** — основной контент карточки.
+- **Кнопка «Редактировать»** (только для не-link клипов) — открывает форму с двумя полями: компактный input заголовка + основной textarea текста. Сохраняется одним вызовом `editClipText(id, text, title)`. Очистка заголовка убирает `title` из хранилища.
+- **«✦ Анализировать»** — появляется, если задан AI-ключ И есть `linkPreview` или текст длиннее 200 символов. Под кнопкой — индикатор качества данных («Полный текст статьи загружен» ✓ или «Только превью — анализ может быть неточным» ⚠).
+- **Блок AI-анализа** — после успешной суммаризации:
+  - заголовок «✦ AI-анализ» (accent, semibold);
+  - **«↗ Поделиться анализом»** — справа в шапке блока, вызывает системный share с текстом конспекта (заголовок берётся из `linkPreview.title` или fallback «Анализ из Clip»);
+  - **«Обновить»** — повторный запрос к AI;
+  - тело конспекта с минимальным markdown-парсером (`**жирное**` → bold).
+- **Теги, дата создания, источник** — блоком ниже.
+- **Удаление** — кнопка с подтверждением.
+
+### ArchiveScreen (`app/(tabs)/archive.tsx`)
+
+Список всех идей с поиском. Поиск (case-insensitive substring) учитывает: `text`, `title`, `tags`. Карточки рендерятся через `ClipCard`. Если у клипа есть `summary` — показывается мелкий бейдж «✦ Есть AI-анализ».
+
+### Другие экраны
+
+- **HomeScreen** (`app/(tabs)/index.tsx`) — daily-карточки + streak. Логика выбора карточек — см. `getDailyCards()` ниже.
+- **SettingsScreen** (`app/(tabs)/settings.tsx`) — раздел AI-анализа (см. начало документа), напоминания, тема (`dark` / `light` / `system`).
+- **OnboardingScreen** — первый запуск, ставит `onboardingDone = true`.
+
+## Конфигурация (`app.json`)
+
+```jsonc
+{
+  "expo": {
+    "name": "Clip",
+    "slug": "clip-app",
+    "scheme": "clip-app",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "android": {
+      "package": "com.jeeno93.clipapp",
+      "softwareKeyboardLayoutMode": "pan",
+      "permissions": ["android.permission.RECORD_AUDIO"]   // ← для голосового ввода
+    },
+    "plugins": [
+      ["expo-router", { "origin": "https://replit.com/" }],
+      "expo-font",
+      "expo-web-browser",
+      ["expo-notifications", { "icon": "...", "color": "#F5C842" }],
+      ["expo-share-intent", {
+        "iosActivationRules": { "NSExtensionActivationSupportsText": true, "NSExtensionActivationSupportsWebURLWithMaxCount": 1 },
+        "androidIntentFilters": ["text/*", "image/*"]
+      }]
+    ]
+  }
+}
+```
+
+- **`android.permissions: ["android.permission.RECORD_AUDIO"]`** — необходимо для `@react-native-voice/voice`. На устройстве разрешение запрашивается рантайм через `PermissionsAndroid.request(...)`.
+- **iOS** для голосового ввода требует ключи `NSMicrophoneUsageDescription` и `NSSpeechRecognitionUsageDescription` в `expo.ios.infoPlist` — пока не настроены.
+- **`expo-share-intent`** — приём шарингов из других приложений (текст и изображения).
+- **`expo-notifications`** — локальные напоминания (час задаётся в настройках).
+
+## Технический стек
+
+**Платформа:**
+- Expo SDK 54 (`~54.0.27`), `newArchEnabled: true` (Fabric/TurboModules)
+- React Native `0.81.5`, React 19
+- expo-router `~6.0.17` (typed routes, file-based роутинг)
+
+**Хранилище и состояние:**
+- `@react-native-async-storage/async-storage` `2.2.0` — единственное локальное хранилище
+- React Context (`ClipsContext`) — глобальный стейт идей и настроек
+
+**UI и анимации:**
+- `react-native-reanimated` `~4.1.1` + `react-native-worklets` `0.5.1` (пульсация микрофона, переходы)
+- `react-native-gesture-handler` `~2.28.0`, `react-native-screens` `~4.16.0`, `react-native-safe-area-context` `~5.6.0`
+- `@expo/vector-icons` `^15.0.3` (Feather)
+- `@expo-google-fonts/inter` — Inter Regular/Medium/SemiBold/Bold
+- `expo-image`, `expo-linear-gradient`, `expo-blur`, `expo-glass-effect`, `expo-haptics`, `expo-symbols`
+
+**Системные интеграции:**
+- `expo-notifications` `^0.32.16` — локальные напоминания
+- `expo-share-intent` `^5.1.1` — приём шарингов (текст / картинки)
+- `expo-image-picker` `~17.0.9` — выбор изображения из галереи
+- `expo-web-browser`, `expo-linking`
+- **`@react-native-voice/voice` `^3.2.4`** — голосовой ввод на экране добавления (требует dev build, в Expo Go недоступен)
+
+**Утилиты:**
+- `zod`, `zod-validation-error` — валидация
+- `@tanstack/react-query` — кэш HTTP-запросов
+- `@workspace/api-client-react` — типизированный клиент к `@workspace/api-server` (общий монорепо-пакет)
+
+**Инструменты:**
+- TypeScript `~5.9.2`, `tsc --noEmit` для проверки типов
+- `babel-plugin-react-compiler` (React Compiler включён через `experiments.reactCompiler`)
+- pnpm workspaces (монорепо)
