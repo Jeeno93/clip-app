@@ -1,0 +1,129 @@
+Обнови логику лимитов токенов в src/utils/summarize.ts
+и src/utils/fetchLinkPreview.ts
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 1 — Лимиты по провайдерам
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Создай константы лимитов символов для анализа:
+
+const PROVIDER_LIMITS = {
+  gemini:  50000,   // 1M токенов контекст
+  claude:  50000,   // 200K токенов контекст  
+  deepseek: 50000,  // 128K токенов контекст
+  openai:  30000,   // 128K токенов контекст
+  yandex:  20000,   // 32K токенов контекст
+} as const
+
+const SOFT_LIMIT = 15000   // мягкий лимит по умолчанию
+const HARD_LIMIT = 50000   // абсолютный максимум
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 2 — Умная нарезка текста
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Создай функцию:
+
+function smartTruncate(text: string, limit: number): string {
+  if (text.length <= limit) return text
+  
+  // Берём 70% начала и 30% конца
+  // Начало содержит введение и главные тезисы
+  // Конец содержит выводы и заключение
+  const startPart = Math.floor(limit * 0.7)
+  const endPart = Math.floor(limit * 0.3)
+  
+  const start = text.slice(0, startPart)
+  const end = text.slice(-endPart)
+  
+  // Обрезаем по границам слов
+  const startClean = start.slice(0, start.lastIndexOf(' '))
+  const endClean = end.slice(end.indexOf(' ') + 1)
+  
+  return startClean + 
+    '\n\n[...фрагмент статьи пропущен...]\n\n' + 
+    endClean
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 3 — Применить в summarizeContent
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+В функции summarizeContent перед построением промпта:
+
+const providerLimit = PROVIDER_LIMITS[provider] ?? SOFT_LIMIT
+const truncatedText = smartTruncate(text, providerLimit)
+
+Использовать truncatedText вместо text в промпте.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 4 — Улучшить парсинг в fetchLinkPreview.ts
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+В функции extractFullText улучши извлечение контента:
+
+1. Для Хабра — специфичный селектор:
+   Хабр хранит контент в div.article-formatted-body
+   Ищи паттерн: class="article-formatted-body"
+   или class="tm-article-body"
+
+2. Общий порядок поиска контента:
+   1) div с классом содержащим "article-body" или 
+      "article-content" или "post-body" или "entry-content"
+   2) <article> тег
+   3) <main> тег  
+   4) Весь body
+
+3. Более агрессивная очистка мусора — убирай:
+   - Все теги: script, style, nav, header, footer, 
+     aside, figure, form, iframe, svg
+   - Элементы с классами содержащими: 
+     "comment", "sidebar", "widget", "banner", 
+     "advertisement", "social", "share", "related"
+     (через regex на class и id атрибуты)
+
+4. Декодирование HTML entities более полное:
+   &nbsp; → пробел
+   &amp; → &
+   &lt; → 
+   &gt; → >
+   &quot; → "
+   &#39; → '
+   &mdash; → —
+   &ndash; → –
+   &laquo; → «
+   &raquo; → »
+   &#[0-9]+; → соответствующий символ через 
+     String.fromCharCode()
+
+5. fetchLinkPreview — увеличь таймаут до 10 секунд
+   Добавь заголовки для лучшей совместимости:
+   headers: {
+     'User-Agent': 'Mozilla/5.0 (compatible; ClipBot/1.0)',
+     'Accept': 'text/html,application/xhtml+xml',
+     'Accept-Language': 'ru,en;q=0.9',
+   }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 5 — Индикатор объёма в ClipDetailScreen
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Обнови индикатор качества данных для анализа:
+
+Если fullText существует:
+  Показывать: "✓ Загружено N символов"
+  Если N > 15000: добавить " (~X мин чтения)"
+  где X = Math.round(N / 1500) — среднее чтение 
+  1500 символов в минуту для русского текста
+
+Если только description:
+  "⚠ Только превью (~N символов) — анализ неточный"
+
+Если ничего нет:
+  "⚠ Нет текста для анализа"
+
+Цвет: если fullText > 5000 → success (#52B788)
+      если только description → textMuted
+      
+Больше ничего не меняй.
+После выполнения обнови CLIP_DOCUMENTATION.md.

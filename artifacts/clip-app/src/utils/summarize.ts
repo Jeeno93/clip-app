@@ -5,6 +5,62 @@ import type { AiDepth, AiModules, AiProvider } from "../storage/clips";
 const TIMEOUT_MS = 30000;
 const YANDEX_FOLDER_ID_KEY = "@clip:yandex_folder_id";
 
+// Per-provider character limits for the analysis input. Values picked to stay
+// well under each provider's context window with room for the system prompt
+// and the model's reply.
+const PROVIDER_LIMITS: Record<AiProvider, number> = {
+  gemini: 50000,   // 1M токенов контекст
+  claude: 50000,   // 200K токенов контекст
+  deepseek: 50000, // 128K токенов контекст
+  openai: 30000,   // 128K токенов контекст
+  yandex: 20000,   // 32K токенов контекст
+};
+const SOFT_LIMIT = 15000; // мягкий лимит по умолчанию (если провайдер неизвестен)
+// Hard ceiling — reserved as the upper bound for any text we ever pass to a
+// provider, even if a future config raises the per-provider limits.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const HARD_LIMIT = 50000;
+
+const TRUNCATE_MARKER = "\n\n[...фрагмент статьи пропущен...]\n\n";
+
+/**
+ * Truncate a long text in a "smart" way: keep 70% from the start (intro and
+ * key theses) and 30% from the end (conclusions), with an explicit
+ * "fragment skipped" marker between them. Cuts on word boundaries so we don't
+ * leave a half-word at the seams.
+ *
+ * The output length is strictly <= `limit` — the marker length is reserved
+ * from the budget. If the limit is so small the marker doesn't fit, the
+ * function falls back to a hard slice from the start.
+ */
+export function smartTruncate(text: string, limit: number): string {
+  if (limit <= 0) return "";
+  if (text.length <= limit) return text;
+
+  // Marker doesn't fit + meaningful padding → hard-cut from the start.
+  if (limit <= TRUNCATE_MARKER.length + 10) {
+    return text.slice(0, limit);
+  }
+
+  // Reserve marker length so the final string never exceeds `limit`.
+  const budget = limit - TRUNCATE_MARKER.length;
+  const startPart = Math.floor(budget * 0.7);
+  // Guard against `endPart === 0`, which would silently flip
+  // `text.slice(-0)` into `text.slice(0)` and return the entire text.
+  const endPart = Math.max(1, budget - startPart);
+
+  const start = text.slice(0, startPart);
+  const end = text.slice(-endPart);
+
+  // Cut on word boundaries — fall back to the raw slice if there is no space.
+  const lastSpaceStart = start.lastIndexOf(" ");
+  const startClean = lastSpaceStart > 0 ? start.slice(0, lastSpaceStart) : start;
+  const firstSpaceEnd = end.indexOf(" ");
+  const endClean = firstSpaceEnd >= 0 ? end.slice(firstSpaceEnd + 1) : end;
+
+  return startClean + TRUNCATE_MARKER + endClean;
+}
+
 function depthInstruction(depth: AiDepth): string {
   switch (depth) {
     case "quick":
@@ -231,8 +287,13 @@ export async function summarizeContent(
     modules.practical;
   if (!anyActive) return null;
 
+  // Trim the input to the provider's safe character limit before building
+  // the prompt — this keeps long articles within the model's context window.
+  const providerLimit = PROVIDER_LIMITS[provider] ?? SOFT_LIMIT;
+  const truncatedText = smartTruncate(text, providerLimit);
+
   const systemPrompt = buildSystemPrompt(depth);
-  const userPrompt = buildUserPrompt(text, modules);
+  const userPrompt = buildUserPrompt(truncatedText, modules);
 
   try {
     if (provider === "gemini") {

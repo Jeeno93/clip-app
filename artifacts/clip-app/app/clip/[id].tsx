@@ -174,24 +174,31 @@ export default function ClipDetailScreen() {
   };
 
   const buildAnalysisInput = (): string => {
-    const text =
+    // No more truncation here — `summarizeContent` slices the text to the
+    // active provider's character limit using `smartTruncate`.
+    return (
       clip.linkPreview?.fullText ||
       clip.linkPreview?.description ||
       clip.text ||
-      "";
-    return text.slice(0, 6000);
+      ""
+    );
   };
 
-  const hasFullText =
-    !!clip.linkPreview?.fullText && clip.linkPreview.fullText.length > 500;
+  const fullTextLen = clip.linkPreview?.fullText?.length ?? 0;
+  const descLen = clip.linkPreview?.description?.length ?? 0;
+  const hasFullText = fullTextLen > 500;
 
   const currentApiKey = aiSettings?.aiProvider
     ? aiSettings.aiKeys[aiSettings.aiProvider]
     : null;
 
+  // Disable the analyze button when there's literally nothing to send —
+  // matches the "⚠ Нет текста для анализа" indicator below.
+  const hasAnalysisInput = buildAnalysisInput().trim().length > 0;
   const canAnalyze =
     !!currentApiKey &&
     !!aiSettings?.aiProvider &&
+    hasAnalysisInput &&
     (!!clip.linkPreview || clip.text.length > 200);
 
   const handleShareSummary = async () => {
@@ -927,13 +934,32 @@ export default function ClipDetailScreen() {
                 <Text style={s.analyzeBtnText}>✦ Анализировать</Text>
               )}
             </TouchableOpacity>
-            {clip.linkPreview && (
-              <Text style={s.analyzeQualityText}>
-                {hasFullText
-                  ? "✓ Полный текст статьи загружен"
-                  : "⚠ Только превью — анализ может быть неточным"}
-              </Text>
-            )}
+            {clip.linkPreview && (() => {
+              // Three quality levels for the analysis input:
+              //   1) full article text loaded   → success colour
+              //   2) only OG description        → muted
+              //   3) nothing usable             → muted
+              let label: string;
+              let colour: string = colors.textMuted;
+              if (fullTextLen > 0) {
+                label = `✓ Загружено ${fullTextLen.toLocaleString("ru-RU")} символов`;
+                if (fullTextLen > 15000) {
+                  // Average reading speed for Russian text ≈ 1500 chars/min.
+                  const minutes = Math.max(1, Math.round(fullTextLen / 1500));
+                  label += ` (~${minutes} мин чтения)`;
+                }
+                if (fullTextLen > 5000) colour = "#52B788";
+              } else if (descLen > 0) {
+                label = `⚠ Только превью (~${descLen} символов) — анализ неточный`;
+              } else {
+                label = "⚠ Нет текста для анализа";
+              }
+              return (
+                <Text style={[s.analyzeQualityText, { color: colour }]}>
+                  {label}
+                </Text>
+              );
+            })()}
           </View>
         ) : null}
 
