@@ -9,9 +9,10 @@ const RESOLUTION_MARKER =
 const RESOLUTION_BLOCK = `
     configurations.all {
         resolutionStrategy {
+            force 'androidx.core:core:1.12.0'
             ${RESOLUTION_MARKER}
-            exclude group: 'com.android.support', module: 'versionedparcelable'
         }
+        exclude group: 'com.android.support'
     }
 `;
 

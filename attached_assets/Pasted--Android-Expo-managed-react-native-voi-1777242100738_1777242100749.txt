@@ -1,0 +1,75 @@
+Нужно исправить конфликт Android зависимостей в Expo 
+managed проекте. Библиотека @react-native-voice/voice 
+тянет старые com.android.support библиотеки которые 
+конфликтуют с AndroidX.
+
+Обнови или создай config plugin который добавляет 
+в android/app/build.gradle глобальное исключение 
+старых support библиотек.
+
+В файле где настроен withAndroidGradleProperties 
+или withAppBuildGradle (обычно app.plugin.js или 
+в plugins/ папке) добавь:
+
+const { withAppBuildGradle } = require('@expo/config-plugins');
+
+module.exports = function withAndroidxFix(config) {
+  return withAppBuildGradle(config, (config) => {
+    if (config.modResults.language === 'groovy') {
+      const addition = `
+configurations.all {
+    resolutionStrategy {
+        force 'androidx.core:core:1.12.0'
+        force 'androidx.versionedparcelable:versionedparcelable:1.1.1'
+    }
+    exclude group: 'com.android.support'
+}
+`;
+      // Добавить перед последней закрывающей скобкой
+      config.modResults.contents = 
+        config.modResults.contents.replace(
+          /(\n}\s*$)/,
+          `${addition}\n}`
+        );
+    }
+    return config;
+  });
+};
+
+Подключи этот плагин в app.json в массив plugins.
+
+Если такой подход уже применялся и не помог —
+попробуй альтернативу: замени @react-native-voice/voice 
+на expo-speech или реализуй голосовой ввод через 
+нативный Android Intent (ACTION_RECOGNIZE_SPEECH) 
+без сторонней библиотеки через expo-modules-core.
+
+ACTION_RECOGNIZE_SPEECH не требует дополнительных 
+зависимостей и использует встроенный Google Speech 
+Recognition на Android — это надёжнее и без конфликтов.
+
+Реализация через Intent:
+import { IntentLauncher } from 'expo-intent-launcher';
+
+async function startVoiceRecognition() {
+  const result = await IntentLauncher.startActivityAsync(
+    'android.speech.action.RECOGNIZE_SPEECH',
+    {
+      extra: {
+        'android.speech.extra.LANGUAGE_MODEL': 'free_form',
+        'android.speech.extra.LANGUAGE': 'ru-RU',
+        'android.speech.extra.PROMPT': 'Говорите...',
+      }
+    }
+  );
+  if (result.resultCode === -1 && result.data) {
+    const results = result.data?.extras?.results;
+    return Array.isArray(results) ? results[0] : null;
+  }
+  return null;
+}
+
+Если используешь Intent подход — удали 
+@react-native-voice/voice из package.json полностью.
+
+Больше ничего не меняй.
