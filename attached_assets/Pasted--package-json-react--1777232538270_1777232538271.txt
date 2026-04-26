@@ -1,0 +1,124 @@
+Добавь голосовой ввод на экран добавления заметки.
+
+ЗАВИСИМОСТЬ:
+Добавь в package.json:
+"@react-native-voice/voice": "^3.2.4"
+
+РЕАЛИЗАЦИЯ в app/add.tsx:
+
+1. Импорт:
+import Voice, { 
+  SpeechResultsEvent, 
+  SpeechErrorEvent 
+} from '@react-native-voice/voice'
+
+2. Стейт:
+const [isListening, setIsListening] = useState(false)
+const [voiceError, setVoiceError] = useState<string | null>(null)
+
+3. useEffect для настройки Voice:
+useEffect(() => {
+  Voice.onSpeechResults = (e: SpeechResultsEvent) => {
+    const transcript = e.value?.[0] || ''
+    if (transcript) {
+      setText(prev => prev ? prev + ' ' + transcript : transcript)
+    }
+    setIsListening(false)
+  }
+  
+  Voice.onSpeechError = (e: SpeechErrorEvent) => {
+    setVoiceError(e.error?.message || 'Ошибка записи')
+    setIsListening(false)
+  }
+  
+  Voice.onSpeechEnd = () => {
+    setIsListening(false)
+  }
+  
+  return () => {
+    Voice.destroy().then(Voice.removeAllListeners)
+  }
+}, [])
+
+4. Функции:
+async function startListening() {
+  try {
+    setVoiceError(null)
+    setIsListening(true)
+    await Voice.start('ru-RU')
+  } catch (e) {
+    setIsListening(false)
+    setVoiceError('Не удалось запустить запись')
+  }
+}
+
+async function stopListening() {
+  try {
+    await Voice.stop()
+    setIsListening(false)
+  } catch (e) {
+    setIsListening(false)
+  }
+}
+
+5. UI — кнопка микрофона:
+Разместить справа от поля текста, выровнять по верхнему краю.
+
+Когда НЕ записывает:
+  Круглая кнопка диаметром 48
+  Фон: bgInput
+  Граница: border, 1px
+  Иконка: 🎤 fontSize 20
+  
+Когда ЗАПИСЫВАЕТ (isListening = true):
+  Фон: accentSubtle  
+  Граница: accent, 2px
+  Иконка: ⏹ fontSize 20
+  Пульсирующая анимация через react-native-reanimated:
+  opacity 1.0 → 0.5 → 1.0, duration 800ms, loop
+
+При нажатии:
+  Если не записывает → startListening()
+  Если записывает → stopListening()
+
+6. Индикатор записи над полем текста:
+Если isListening:
+  Показать строку: "● Говорите..." 
+  Цвет: accent, fontSize xs, анимация мигания
+
+Если voiceError:
+  Показать строку с ошибкой textMuted, fontSize xs
+  Автоскрыть через 3 секунды
+
+7. Источник при сохранении:
+Если пользователь использовал голосовой ввод (isListening 
+был true хотя бы раз) — source = 'voice'
+Иначе — source = 'manual'
+
+8. Разрешение на микрофон:
+Добавь в app.json в секцию android:
+"permissions": ["android.permission.RECORD_AUDIO"]
+
+Запрашивать разрешение при первом нажатии на кнопку 
+через expo-modules-core или стандартный PermissionsAndroid:
+
+import { PermissionsAndroid } from 'react-native'
+
+async function requestMicPermission() {
+  const granted = await PermissionsAndroid.request(
+    PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+    {
+      title: 'Доступ к микрофону',
+      message: 'Clip нужен микрофон для голосового ввода',
+      buttonPositive: 'Разрешить',
+      buttonNegative: 'Отмена'
+    }
+  )
+  return granted === PermissionsAndroid.RESULTS.GRANTED
+}
+
+Вызывать requestMicPermission() перед startListening().
+Если не разрешено — показать Alert с объяснением.
+
+Больше ничего не меняй. После изменений обнови 
+CLIP_DOCUMENTATION.md.

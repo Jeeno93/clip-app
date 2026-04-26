@@ -7,6 +7,7 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  PermissionsAndroid,
   Platform,
   ScrollView,
   StyleSheet,
@@ -15,6 +16,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
@@ -26,6 +34,24 @@ import {
   isUrl,
   type LinkPreview,
 } from "../src/utils/fetchLinkPreview";
+import type {
+  SpeechErrorEvent,
+  SpeechResultsEvent,
+} from "@react-native-voice/voice";
+
+// Voice input requires a development build (native module). In Expo Go and on
+// web the require throws / is unsupported — we degrade gracefully and just
+// hide the mic button.
+let Voice: any = null;
+if (Platform.OS !== "web") {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    Voice = require("@react-native-voice/voice").default;
+  } catch {
+    Voice = null;
+  }
+}
+const VOICE_AVAILABLE = !!Voice;
 
 export default function AddClipScreen() {
   const colors = useColors();
@@ -49,7 +75,108 @@ export default function AddClipScreen() {
   const [linkUrl, setLinkUrl] = useState<string | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
 
+  // Voice input state
+  const [isListening, setIsListening] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [hasUsedVoice, setHasUsedVoice] = useState(false);
+
   const inputRef = useRef<TextInput>(null);
+
+  // Pulsing animation for the mic button while recording
+  const pulse = useSharedValue(1);
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
+  useEffect(() => {
+    if (isListening) {
+      pulse.value = withRepeat(
+        withSequence(
+          withTiming(0.5, { duration: 800 }),
+          withTiming(1.0, { duration: 800 })
+        ),
+        -1,
+        true
+      );
+    } else {
+      pulse.value = withTiming(1, { duration: 200 });
+    }
+  }, [isListening, pulse]);
+
+  // Voice setup
+  useEffect(() => {
+    if (!VOICE_AVAILABLE) return;
+    Voice.onSpeechResults = (e: SpeechResultsEvent) => {
+      const transcript = e.value?.[0] || "";
+      if (transcript) {
+        setText((prev) => (prev ? prev + " " + transcript : transcript));
+      }
+      setIsListening(false);
+    };
+    Voice.onSpeechError = (e: SpeechErrorEvent) => {
+      setVoiceError(e.error?.message || "Ошибка записи");
+      setIsListening(false);
+    };
+    Voice.onSpeechEnd = () => {
+      setIsListening(false);
+    };
+    return () => {
+      try {
+        Voice.destroy().then(() => Voice.removeAllListeners());
+      } catch {}
+    };
+  }, []);
+
+  // Auto-hide voice error after 3 seconds
+  useEffect(() => {
+    if (!voiceError) return;
+    const t = setTimeout(() => setVoiceError(null), 3000);
+    return () => clearTimeout(t);
+  }, [voiceError]);
+
+  const requestMicPermission = async (): Promise<boolean> => {
+    if (Platform.OS !== "android") return true;
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        {
+          title: "Доступ к микрофону",
+          message: "Clip нужен микрофон для голосового ввода",
+          buttonPositive: "Разрешить",
+          buttonNegative: "Отмена",
+        }
+      );
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    } catch {
+      return false;
+    }
+  };
+
+  const startListening = async () => {
+    if (!VOICE_AVAILABLE) return;
+    const ok = await requestMicPermission();
+    if (!ok) {
+      Alert.alert(
+        "Нет доступа к микрофону",
+        "Чтобы пользоваться голосовым вводом, разреши доступ к микрофону в настройках устройства."
+      );
+      return;
+    }
+    try {
+      setVoiceError(null);
+      setIsListening(true);
+      setHasUsedVoice(true);
+      await Voice.start("ru-RU");
+    } catch {
+      setIsListening(false);
+      setVoiceError("Не удалось запустить запись");
+    }
+  };
+
+  const stopListening = async () => {
+    if (!VOICE_AVAILABLE) return;
+    try {
+      await Voice.stop();
+    } catch {}
+    setIsListening(false);
+  };
 
   useEffect(() => {
     // Don't autofocus when an image is shared — comment is optional
@@ -84,6 +211,8 @@ export default function AddClipScreen() {
     ? "screenshot"
     : linkPreview
     ? "link"
+    : hasUsedVoice
+    ? "voice"
     : (params.source ?? "manual");
 
   const canSave = hasImage || text.trim().length > 0;
@@ -200,6 +329,46 @@ export default function AddClipScreen() {
     },
     textInputCompact: {
       minHeight: 80,
+    },
+    textRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 10,
+    },
+    textInputFlex: {
+      flex: 1,
+    },
+    micButton: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: colors.bgInput,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    micButtonActive: {
+      backgroundColor: colors.accentSubtle,
+      borderColor: colors.accent,
+      borderWidth: 2,
+    },
+    micIcon: {
+      fontSize: 20,
+    },
+    voiceStatusRow: {
+      minHeight: 18,
+      marginBottom: 6,
+    },
+    recordingIndicator: {
+      fontSize: 12,
+      color: colors.accent,
+      fontFamily: "Inter_500Medium",
+    },
+    voiceErrorText: {
+      fontSize: 12,
+      color: colors.textMuted,
+      fontFamily: "Inter_400Regular",
     },
     imagePreview: {
       width: "100%",
@@ -397,25 +566,59 @@ export default function AddClipScreen() {
             maxLength={100}
             editable={!reachedLimit}
           />
-          <TextInput
-            ref={inputRef}
-            value={text}
-            onChangeText={setText}
-            placeholder={
-              hasImage
-                ? "Добавь комментарий..."
-                : linkPreview
-                ? "Добавь комментарий..."
-                : "Введи текст идеи или мысли..."
-            }
-            placeholderTextColor={colors.textMuted}
-            style={[
-              s.textInput,
-              (hasImage || linkPreview) && s.textInputCompact,
-            ]}
-            multiline
-            editable={!reachedLimit}
-          />
+          <View style={s.voiceStatusRow}>
+            {isListening ? (
+              <Animated.Text style={[s.recordingIndicator, pulseStyle]}>
+                ● Говорите...
+              </Animated.Text>
+            ) : voiceError ? (
+              <Text style={s.voiceErrorText}>{voiceError}</Text>
+            ) : null}
+          </View>
+          <View style={s.textRow}>
+            <TextInput
+              ref={inputRef}
+              value={text}
+              onChangeText={setText}
+              placeholder={
+                hasImage
+                  ? "Добавь комментарий..."
+                  : linkPreview
+                  ? "Добавь комментарий..."
+                  : "Введи текст идеи или мысли..."
+              }
+              placeholderTextColor={colors.textMuted}
+              style={[
+                s.textInput,
+                s.textInputFlex,
+                (hasImage || linkPreview) && s.textInputCompact,
+              ]}
+              multiline
+              editable={!reachedLimit}
+            />
+            {VOICE_AVAILABLE && (
+              <Animated.View
+                style={[
+                  s.micButton,
+                  isListening && s.micButtonActive,
+                  isListening && pulseStyle,
+                ]}
+              >
+                <TouchableOpacity
+                  onPress={isListening ? stopListening : startListening}
+                  disabled={reachedLimit}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text style={s.micIcon}>{isListening ? "⏹" : "🎤"}</Text>
+                </TouchableOpacity>
+              </Animated.View>
+            )}
+          </View>
         </View>
 
         {source !== "manual" && (

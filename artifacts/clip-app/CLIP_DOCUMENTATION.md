@@ -110,6 +110,42 @@ YandexGPT дополнительно требует **FolderID** (хранитс
 | `@clip:daily_date` | Дата последней генерации daily-карточек |
 | `@clip:yandex_folder_id` | FolderID для YandexGPT |
 
+## Голосовой ввод
+
+На экране добавления (`app/add.tsx`) рядом с полем основного текста есть круглая кнопка микрофона (диаметр 48). Реализовано на пакете **`@react-native-voice/voice`**.
+
+### Поведение
+
+- В обычном состоянии — кружок с фоном `bgInput`, бордер `border` (1px) и иконкой 🎤 (20px).
+- В режиме записи (`isListening = true`) — фон `accentSubtle`, бордер `accent` (2px), иконка ⏹. Кнопка пульсирует через `react-native-reanimated`: `opacity 1 → 0.5 → 1`, длительность 800мс, бесконечный реверс-цикл.
+- Над полем текста, когда идёт запись, появляется строка **«● Говорите…»** (`accent`, 12px) с той же пульсацией.
+- При ошибке распознавания — на месте этой строки 3 секунды показывается текст ошибки (`textMuted`, 12px), затем автоматически исчезает.
+- При нажатии кнопки запускается `startListening()` (если не пишем) или `stopListening()` (если пишем). Перед `Voice.start("ru-RU")` запрашивается разрешение `RECORD_AUDIO` через `PermissionsAndroid.request(...)`. Если разрешение не дали — показывается Alert с объяснением.
+- Распознанный текст добавляется к существующему через пробел (`prev + " " + transcript`).
+
+### Источник
+
+Если пользователь хотя бы раз нажал на кнопку записи (флаг `hasUsedVoice` стал `true`) — поле `source` сохраняемой карточки становится `"voice"`. Приоритет источников: `screenshot` > `link` > `voice` > переданный из share-intent / `manual`.
+
+### Разрешения
+
+В `app.json` для Android прописано `"permissions": ["android.permission.RECORD_AUDIO"]`. iOS-разрешения (`NSMicrophoneUsageDescription`, `NSSpeechRecognitionUsageDescription`) пока не настроены — для iOS сборки их нужно будет добавить в `infoPlist`.
+
+### ⚠️ Требуется development build
+
+`@react-native-voice/voice` — нативный модуль, **не работающий в Expo Go**. Чтобы кнопка микрофона появилась в приложении, нужен dev build:
+
+```bash
+# через EAS
+eas build --profile development --platform android
+
+# или локально через prebuild
+pnpm --filter @workspace/clip-app exec expo prebuild
+pnpm --filter @workspace/clip-app exec expo run:android
+```
+
+В `app/add.tsx` импорт пакета обёрнут в `try { require(...) } catch {}` (флаг `VOICE_AVAILABLE`). На вебе и в Expo Go (где нативного модуля нет) кнопка микрофона просто **не отрисовывается**, остальная функциональность экрана не страдает.
+
 ## Заголовок карточки
 
 У каждой идеи есть необязательное поле `title?: string` (макс. 100 символов).
