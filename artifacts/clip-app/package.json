@@ -56,7 +56,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
-    "@react-native-voice/voice": "^3.2.4",
+    "expo-intent-launcher": "~13.0.8",
     "expo-notifications": "^0.32.16",
     "expo-share-intent": "^5.1.1"
   }

@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as IntentLauncher from "expo-intent-launcher";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -7,7 +8,6 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
-  PermissionsAndroid,
   Platform,
   ScrollView,
   StyleSheet,
@@ -16,13 +16,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
@@ -34,24 +27,11 @@ import {
   isUrl,
   type LinkPreview,
 } from "../src/utils/fetchLinkPreview";
-import type {
-  SpeechErrorEvent,
-  SpeechResultsEvent,
-} from "@react-native-voice/voice";
 
-// Voice input requires a development build (native module). In Expo Go and on
-// web the require throws / is unsupported — we degrade gracefully and just
-// hide the mic button.
-let Voice: any = null;
-if (Platform.OS !== "web") {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    Voice = require("@react-native-voice/voice").default;
-  } catch {
-    Voice = null;
-  }
-}
-const VOICE_AVAILABLE = !!Voice;
+// Voice input is implemented via the system speech-recognition Intent
+// (ACTION_RECOGNIZE_SPEECH) which is Android-only and ships with the Google
+// app — no third-party native module, no RECORD_AUDIO permission required.
+const VOICE_AVAILABLE = Platform.OS === "android";
 
 export default function AddClipScreen() {
   const colors = useColors();
@@ -75,107 +55,55 @@ export default function AddClipScreen() {
   const [linkUrl, setLinkUrl] = useState<string | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
 
-  // Voice input state
-  const [isListening, setIsListening] = useState(false);
-  const [voiceError, setVoiceError] = useState<string | null>(null);
+  // Tracked so the saved clip's `source` becomes "voice" when transcript was used.
   const [hasUsedVoice, setHasUsedVoice] = useState(false);
 
   const inputRef = useRef<TextInput>(null);
 
-  // Pulsing animation for the mic button while recording
-  const pulse = useSharedValue(1);
-  const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
-  useEffect(() => {
-    if (isListening) {
-      pulse.value = withRepeat(
-        withSequence(
-          withTiming(0.5, { duration: 800 }),
-          withTiming(1.0, { duration: 800 })
-        ),
-        -1,
-        true
-      );
-    } else {
-      pulse.value = withTiming(1, { duration: 200 });
-    }
-  }, [isListening, pulse]);
-
-  // Voice setup
-  useEffect(() => {
+  const startVoiceInput = async () => {
     if (!VOICE_AVAILABLE) return;
-    Voice.onSpeechResults = (e: SpeechResultsEvent) => {
-      const transcript = e.value?.[0] || "";
-      if (transcript) {
-        setText((prev) => (prev ? prev + " " + transcript : transcript));
-      }
-      setIsListening(false);
-    };
-    Voice.onSpeechError = (e: SpeechErrorEvent) => {
-      setVoiceError(e.error?.message || "Ошибка записи");
-      setIsListening(false);
-    };
-    Voice.onSpeechEnd = () => {
-      setIsListening(false);
-    };
-    return () => {
-      try {
-        Voice.destroy().then(() => Voice.removeAllListeners());
-      } catch {}
-    };
-  }, []);
-
-  // Auto-hide voice error after 3 seconds
-  useEffect(() => {
-    if (!voiceError) return;
-    const t = setTimeout(() => setVoiceError(null), 3000);
-    return () => clearTimeout(t);
-  }, [voiceError]);
-
-  const requestMicPermission = async (): Promise<boolean> => {
-    if (Platform.OS !== "android") return true;
     try {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+      const result = await IntentLauncher.startActivityAsync(
+        // The constant isn't exported by expo-intent-launcher — pass the raw
+        // Android action string, which is the documented usage for system
+        // intents that the lib doesn't enumerate.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        "android.speech.action.RECOGNIZE_SPEECH" as any,
         {
-          title: "Доступ к микрофону",
-          message: "Clip нужен микрофон для голосового ввода",
-          buttonPositive: "Разрешить",
-          buttonNegative: "Отмена",
+          extra: {
+            "android.speech.extra.LANGUAGE_MODEL": "free_form",
+            "android.speech.extra.LANGUAGE": "ru-RU",
+            "android.speech.extra.MAX_RESULTS": 1,
+            "android.speech.extra.PROMPT": "Говорите...",
+          },
         }
       );
-      return granted === PermissionsAndroid.RESULTS.GRANTED;
-    } catch {
-      return false;
-    }
-  };
+      // RESULT_OK === -1 on Android.
+      if (result.resultCode !== -1) return;
 
-  const startListening = async () => {
-    if (!VOICE_AVAILABLE) return;
-    const ok = await requestMicPermission();
-    if (!ok) {
+      // Different lib versions surface the speech results under either
+      // `result.extra` (current) or `result.data.extras` (older / alt). Read
+      // both shapes defensively.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const r = result as any;
+      const bag = r?.extra ?? r?.data?.extras ?? null;
+      const list = bag?.results;
+      const transcript: string | null = Array.isArray(list)
+        ? typeof list[0] === "string"
+          ? list[0]
+          : null
+        : null;
+
+      if (transcript) {
+        setText((prev) => (prev ? prev + " " + transcript : transcript));
+        setHasUsedVoice(true);
+      }
+    } catch {
       Alert.alert(
-        "Нет доступа к микрофону",
-        "Чтобы пользоваться голосовым вводом, разреши доступ к микрофону в настройках устройства."
+        "Голосовой ввод недоступен",
+        "Убедись, что на устройстве установлено приложение Google."
       );
-      return;
     }
-    try {
-      setVoiceError(null);
-      setIsListening(true);
-      setHasUsedVoice(true);
-      await Voice.start("ru-RU");
-    } catch {
-      setIsListening(false);
-      setVoiceError("Не удалось запустить запись");
-    }
-  };
-
-  const stopListening = async () => {
-    if (!VOICE_AVAILABLE) return;
-    try {
-      await Voice.stop();
-    } catch {}
-    setIsListening(false);
   };
 
   useEffect(() => {
@@ -348,27 +276,8 @@ export default function AddClipScreen() {
       alignItems: "center",
       justifyContent: "center",
     },
-    micButtonActive: {
-      backgroundColor: colors.accentSubtle,
-      borderColor: colors.accent,
-      borderWidth: 2,
-    },
     micIcon: {
       fontSize: 20,
-    },
-    voiceStatusRow: {
-      minHeight: 18,
-      marginBottom: 6,
-    },
-    recordingIndicator: {
-      fontSize: 12,
-      color: colors.accent,
-      fontFamily: "Inter_500Medium",
-    },
-    voiceErrorText: {
-      fontSize: 12,
-      color: colors.textMuted,
-      fontFamily: "Inter_400Regular",
     },
     imagePreview: {
       width: "100%",
@@ -566,15 +475,6 @@ export default function AddClipScreen() {
             maxLength={100}
             editable={!reachedLimit}
           />
-          <View style={s.voiceStatusRow}>
-            {isListening ? (
-              <Animated.Text style={[s.recordingIndicator, pulseStyle]}>
-                ● Говорите...
-              </Animated.Text>
-            ) : voiceError ? (
-              <Text style={s.voiceErrorText}>{voiceError}</Text>
-            ) : null}
-          </View>
           <View style={s.textRow}>
             <TextInput
               ref={inputRef}
@@ -597,26 +497,13 @@ export default function AddClipScreen() {
               editable={!reachedLimit}
             />
             {VOICE_AVAILABLE && (
-              <Animated.View
-                style={[
-                  s.micButton,
-                  isListening && s.micButtonActive,
-                  isListening && pulseStyle,
-                ]}
+              <TouchableOpacity
+                onPress={startVoiceInput}
+                disabled={reachedLimit}
+                style={s.micButton}
               >
-                <TouchableOpacity
-                  onPress={isListening ? stopListening : startListening}
-                  disabled={reachedLimit}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Text style={s.micIcon}>{isListening ? "⏹" : "🎤"}</Text>
-                </TouchableOpacity>
-              </Animated.View>
+                <Text style={s.micIcon}>🎤</Text>
+              </TouchableOpacity>
             )}
           </View>
         </View>

@@ -151,39 +151,28 @@ Accept-Language: ru,en;q=0.9
 
 ## Голосовой ввод
 
-На экране добавления (`app/add.tsx`) рядом с полем основного текста есть круглая кнопка микрофона (диаметр 48). Реализовано на пакете **`@react-native-voice/voice`**.
+На экране добавления (`app/add.tsx`) рядом с полем основного текста есть круглая кнопка микрофона (диаметр 48). Реализовано через **системный Android Intent `ACTION_RECOGNIZE_SPEECH`** (пакет `expo-intent-launcher`) — без сторонних нативных модулей и без разрешения `RECORD_AUDIO`.
 
 ### Поведение
 
-- В обычном состоянии — кружок с фоном `bgInput`, бордер `border` (1px) и иконкой 🎤 (20px).
-- В режиме записи (`isListening = true`) — фон `accentSubtle`, бордер `accent` (2px), иконка ⏹. Кнопка пульсирует через `react-native-reanimated`: `opacity 1 → 0.5 → 1`, длительность 800мс, бесконечный реверс-цикл.
-- Над полем текста, когда идёт запись, появляется строка **«● Говорите…»** (`accent`, 12px) с той же пульсацией.
-- При ошибке распознавания — на месте этой строки 3 секунды показывается текст ошибки (`textMuted`, 12px), затем автоматически исчезает.
-- При нажатии кнопки запускается `startListening()` (если не пишем) или `stopListening()` (если пишем). Перед `Voice.start("ru-RU")` запрашивается разрешение `RECORD_AUDIO` через `PermissionsAndroid.request(...)`. Если разрешение не дали — показывается Alert с объяснением.
-- Распознанный текст добавляется к существующему через пробел (`prev + " " + transcript`).
+- Кнопка — кружок с фоном `bgInput`, бордером `border` (1px) и иконкой 🎤 (20px).
+- При нажатии вызывается `startVoiceInput()` → `IntentLauncher.startActivityAsync("android.speech.action.RECOGNIZE_SPEECH", { extra: { LANGUAGE: "ru-RU", PROMPT: "Говорите...", MAX_RESULTS: 1, LANGUAGE_MODEL: "free_form" } })`.
+- Открывается **системный диалог Google Speech Recognition** с прогрессом записи и отменой — состояние записи держит ОС, в самом приложении нет ни `isListening`, ни пульсации, ни своего индикатора.
+- После `RESULT_OK` (`resultCode === -1`) приложение читает первый элемент массива `results` (поддерживает обе формы возврата — `result.extra.results` и `result.data.extras.results`) и добавляет к тексту через пробел: `prev + " " + transcript`.
+- Если на устройстве не установлен Google-приложение / нет распознавания — `startActivityAsync` бросает, и пользователь видит Alert «Голосовой ввод недоступен. Убедись, что на устройстве установлено приложение Google».
 
 ### Источник
 
-Если пользователь хотя бы раз нажал на кнопку записи (флаг `hasUsedVoice` стал `true`) — поле `source` сохраняемой карточки становится `"voice"`. Приоритет источников: `screenshot` > `link` > `voice` > переданный из share-intent / `manual`.
+Если транскрипт успешно вернулся хотя бы раз (флаг `hasUsedVoice` стал `true`) — поле `source` сохраняемой карточки становится `"voice"`. Приоритет источников: `screenshot` > `link` > `voice` > переданный из share-intent / `manual`.
 
 ### Разрешения
 
-В `app.json` для Android прописано `"permissions": ["android.permission.RECORD_AUDIO"]`. iOS-разрешения (`NSMicrophoneUsageDescription`, `NSSpeechRecognitionUsageDescription`) пока не настроены — для iOS сборки их нужно будет добавить в `infoPlist`.
+`ACTION_RECOGNIZE_SPEECH` **не требует разрешений** — захват звука и распознавание делает системный Google-сервис в своём процессе, приложение получает только финальный текст. В `app.json` пермишн `RECORD_AUDIO` не нужен и удалён.
 
-### ⚠️ Требуется development build
+### Платформы
 
-`@react-native-voice/voice` — нативный модуль, **не работающий в Expo Go**. Чтобы кнопка микрофона появилась в приложении, нужен dev build:
-
-```bash
-# через EAS
-eas build --profile development --platform android
-
-# или локально через prebuild
-pnpm --filter @workspace/clip-app exec expo prebuild
-pnpm --filter @workspace/clip-app exec expo run:android
-```
-
-В `app/add.tsx` импорт пакета обёрнут в `try { require(...) } catch {}` (флаг `VOICE_AVAILABLE`). На вебе и в Expo Go (где нативного модуля нет) кнопка микрофона просто **не отрисовывается**, остальная функциональность экрана не страдает.
+- Кнопка микрофона показывается **только на Android** (`VOICE_AVAILABLE = Platform.OS === "android"`). На iOS и в вебе кнопка скрыта — нативного аналога системного диалога распознавания у iOS нет.
+- В **Expo Go** на Android всё работает «из коробки» — никаких нативных модулей, dev build не требуется.
 
 ## Заголовок карточки
 
@@ -316,7 +305,7 @@ interface Streak {
 
 - **Заголовок (необязательно)** — компактный input semibold 16px с нижней подчёркивающей линией, лимит 100 символов. Сохраняется в `Clip.title`.
 - **Текст идеи** — multiline textarea, 16px. Если открыт с `?sharedText=...` или со скриншотом, поведение меняется (не автофокусится при картинке).
-- **Кнопка микрофона** (см. раздел «Голосовой ввод») — справа от поля текста, диаметр 48, активируется при нажатии. Реализована через `@react-native-voice/voice`. Требует разрешения `RECORD_AUDIO` на Android и **dev build** (в Expo Go и на вебе кнопка скрыта).
+- **Кнопка микрофона** (см. раздел «Голосовой ввод») — справа от поля текста, диаметр 48, видна только на Android. По нажатию открывается системный диалог Google Speech Recognition через `expo-intent-launcher` (Intent `ACTION_RECOGNIZE_SPEECH`). Без разрешения `RECORD_AUDIO`, без dev build, работает в Expo Go.
 - **Превью ссылки** — если в тексте URL, асинхронно подгружается `fetchLinkPreview` и показывается карточка с картинкой/заголовком/описанием/доменом.
 - **Превью изображения** — если открыт со `?imageUri=...`.
 - **Теги** — `TagPicker` со всеми существующими тегами + ввод нового.
@@ -362,8 +351,7 @@ interface Streak {
     "newArchEnabled": true,
     "android": {
       "package": "com.jeeno93.clipapp",
-      "softwareKeyboardLayoutMode": "pan",
-      "permissions": ["android.permission.RECORD_AUDIO"]   // ← для голосового ввода
+      "softwareKeyboardLayoutMode": "pan"
     },
     "plugins": [
       ["expo-router", { "origin": "https://replit.com/" }],
@@ -379,8 +367,7 @@ interface Streak {
 }
 ```
 
-- **`android.permissions: ["android.permission.RECORD_AUDIO"]`** — необходимо для `@react-native-voice/voice`. На устройстве разрешение запрашивается рантайм через `PermissionsAndroid.request(...)`.
-- **iOS** для голосового ввода требует ключи `NSMicrophoneUsageDescription` и `NSSpeechRecognitionUsageDescription` в `expo.ios.infoPlist` — пока не настроены.
+- **Голосовой ввод** через системный Intent `ACTION_RECOGNIZE_SPEECH` — никаких разрешений в `android.permissions` не требуется. Работает только на Android (на iOS аналога системного диалога нет).
 - **`expo-share-intent`** — приём шарингов из других приложений (текст и изображения).
 - **`expo-notifications`** — локальные напоминания (час задаётся в настройках).
 
@@ -396,7 +383,7 @@ interface Streak {
 - React Context (`ClipsContext`) — глобальный стейт идей и настроек
 
 **UI и анимации:**
-- `react-native-reanimated` `~4.1.1` + `react-native-worklets` `0.5.1` (пульсация микрофона, переходы)
+- `react-native-reanimated` `~4.1.1` + `react-native-worklets` `0.5.1` (переходы, анимации)
 - `react-native-gesture-handler` `~2.28.0`, `react-native-screens` `~4.16.0`, `react-native-safe-area-context` `~5.6.0`
 - `@expo/vector-icons` `^15.0.3` (Feather)
 - `@expo-google-fonts/inter` — Inter Regular/Medium/SemiBold/Bold
@@ -407,7 +394,7 @@ interface Streak {
 - `expo-share-intent` `^5.1.1` — приём шарингов (текст / картинки)
 - `expo-image-picker` `~17.0.9` — выбор изображения из галереи
 - `expo-web-browser`, `expo-linking`
-- **`@react-native-voice/voice` `^3.2.4`** — голосовой ввод на экране добавления (требует dev build, в Expo Go недоступен)
+- **`expo-intent-launcher` `~13.0.8`** — голосовой ввод на экране добавления через системный Android Intent `ACTION_RECOGNIZE_SPEECH` (Android-only, работает в Expo Go, без `RECORD_AUDIO`)
 
 **Утилиты:**
 - `zod`, `zod-validation-error` — валидация

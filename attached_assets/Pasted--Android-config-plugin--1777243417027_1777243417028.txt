@@ -1,0 +1,69 @@
+Сборка Android падает из-за конфликта зависимостей 
+который мы создали config plugin'ом. Нужно откатиться 
+к рабочему состоянию.
+
+ШАГ 1 — Удали все наши правки для fix зависимостей:
+- Удали любой withAndroidxFix или withAppBuildGradle 
+  plugin который мы добавляли
+- Удали его из plugins массива в app.json
+- Удали @react-native-voice/voice из package.json 
+  и из всех импортов
+
+ШАГ 2 — Реализуй голосовой ввод через 
+expo-intent-launcher без нативных модулей:
+
+В package.json добавь если нет:
+"expo-intent-launcher": "~12.0.0"
+
+В app/add.tsx замени всю логику Voice на:
+
+import * as IntentLauncher from 'expo-intent-launcher';
+
+async function startVoiceInput() {
+  try {
+    const result = await IntentLauncher.startActivityAsync(
+      'android.speech.action.RECOGNIZE_SPEECH' as any,
+      {
+        extra: {
+          'android.speech.extra.LANGUAGE_MODEL': 'free_form',
+          'android.speech.extra.LANGUAGE': 'ru-RU',
+          'android.speech.extra.MAX_RESULTS': 1,
+          'android.speech.extra.PROMPT': 'Говорите...',
+        }
+      }
+    );
+    if (result.resultCode === -1) {
+      const results = (result.data as any)?.extras?.results;
+      const transcript = Array.isArray(results) 
+        ? results[0] 
+        : null;
+      if (transcript) {
+        setText(prev => prev ? prev + ' ' + transcript : transcript);
+        setHasUsedVoice(true);
+      }
+    }
+  } catch (e) {
+    Alert.alert(
+      'Голосовой ввод недоступен',
+      'Убедись что на устройстве установлено Google приложение'
+    );
+  }
+}
+
+Кнопка микрофона вызывает startVoiceInput() напрямую.
+Убери весь стейт isListening, voiceError — 
+Intent сам показывает системный диалог записи.
+Убери useEffect для Voice handlers.
+Убери запрос разрешения RECORD_AUDIO — Intent не требует.
+
+ШАГ 3 — Проверь app.json:
+Убедись что в plugins нет ничего лишнего что мы 
+добавляли для fix зависимостей.
+Оставь только оригинальные плагины:
+expo-router, expo-font, expo-web-browser, 
+expo-notifications, expo-share-intent
+
+ШАГ 4 — Очисти кеш pnpm:
+Выполни: pnpm store prune
+
+Больше ничего не меняй.
