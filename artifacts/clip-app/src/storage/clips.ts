@@ -36,6 +36,14 @@ export interface AiModules {
   practical: boolean;
 }
 
+export interface AiKeys {
+  gemini: string | null;
+  claude: string | null;
+  openai: string | null;
+  deepseek: string | null;
+  yandex: string | null;
+}
+
 export interface Streak {
   count: number;
   lastDate: string;
@@ -48,7 +56,7 @@ export interface Settings {
   onboardingDone: boolean;
   themeMode: ThemeMode;
   aiProvider: AiProvider | null;
-  aiApiKey: string | null;
+  aiKeys: AiKeys;
   aiDepth: AiDepth;
   aiModules: AiModules;
 }
@@ -115,6 +123,27 @@ export async function getDailyCards(): Promise<Clip[]> {
 
   const today = todayKey();
   const target = Math.min(3, clips.length);
+
+  // 1. Карточки, добавленные сегодня (UTC). clips уже отсортированы newest first.
+  const todayClips = clips.filter(
+    (c) => c.createdAt.slice(0, 10) === today
+  );
+
+  // 2. Если сегодня уже 3+ — показать 3 самых новых (без фиксации на день).
+  if (todayClips.length >= 3) {
+    return todayClips.slice(0, 3);
+  }
+
+  // 3. Если сегодня 1-2 — показать их + добрать случайных из архива (без фиксации).
+  if (todayClips.length > 0) {
+    const usedIds = new Set(todayClips.map((c) => c.id));
+    const pool = clips.filter((c) => !usedIds.has(c.id));
+    const shuffledPool = [...pool].sort(() => Math.random() - 0.5);
+    const fill = shuffledPool.slice(0, target - todayClips.length);
+    return [...todayClips, ...fill];
+  }
+
+  // 4. Сегодня ничего не добавлено — старая логика с фиксацией на день.
   const savedDate = await AsyncStorage.getItem(DAILY_DATE_KEY);
   const savedIds = await AsyncStorage.getItem(DAILY_CARDS_KEY);
 
@@ -198,12 +227,20 @@ export async function getStreak(): Promise<Streak> {
   }
 }
 
+const DEFAULT_AI_KEYS: AiKeys = {
+  gemini: null,
+  claude: null,
+  openai: null,
+  deepseek: null,
+  yandex: null,
+};
+
 const DEFAULT_SETTINGS: Settings = {
   notificationHour: null,
   onboardingDone: false,
   themeMode: "dark",
   aiProvider: null,
-  aiApiKey: null,
+  aiKeys: { ...DEFAULT_AI_KEYS },
   aiDepth: "standard",
   aiModules: {
     keyIdeas: true,
@@ -217,18 +254,40 @@ const DEFAULT_SETTINGS: Settings = {
 export async function getSettings(): Promise<Settings> {
   try {
     const raw = await AsyncStorage.getItem(SETTINGS_KEY);
-    if (!raw) return { ...DEFAULT_SETTINGS };
+    if (!raw) return { ...DEFAULT_SETTINGS, aiKeys: { ...DEFAULT_AI_KEYS } };
     const saved = JSON.parse(raw);
+
+    // Deep-merge aiKeys with defaults
+    const aiKeys: AiKeys = {
+      ...DEFAULT_AI_KEYS,
+      ...(saved.aiKeys ?? {}),
+    };
+
+    // Migration: legacy single aiApiKey -> aiKeys[aiProvider]
+    if (
+      typeof saved.aiApiKey === "string" &&
+      saved.aiApiKey.trim().length > 0 &&
+      saved.aiProvider &&
+      typeof saved.aiProvider === "string" &&
+      saved.aiProvider in aiKeys &&
+      !aiKeys[saved.aiProvider as AiProvider]
+    ) {
+      aiKeys[saved.aiProvider as AiProvider] = saved.aiApiKey.trim();
+    }
+
+    const { aiApiKey: _legacy, ...rest } = saved;
+
     return {
       ...DEFAULT_SETTINGS,
-      ...saved,
+      ...rest,
+      aiKeys,
       aiModules: {
         ...DEFAULT_SETTINGS.aiModules,
         ...(saved.aiModules ?? {}),
       },
     };
   } catch {
-    return { ...DEFAULT_SETTINGS };
+    return { ...DEFAULT_SETTINGS, aiKeys: { ...DEFAULT_AI_KEYS } };
   }
 }
 

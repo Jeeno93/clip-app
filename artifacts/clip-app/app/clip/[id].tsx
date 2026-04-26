@@ -175,13 +175,27 @@ export default function ClipDetailScreen() {
   const hasFullText =
     !!clip.linkPreview?.fullText && clip.linkPreview.fullText.length > 500;
 
+  const currentApiKey = aiSettings?.aiProvider
+    ? aiSettings.aiKeys[aiSettings.aiProvider]
+    : null;
+
   const canAnalyze =
-    !!aiSettings?.aiApiKey &&
+    !!currentApiKey &&
     !!aiSettings?.aiProvider &&
     (!!clip.linkPreview || clip.text.length > 200);
 
+  const handleShareSummary = async () => {
+    if (!clip.summary) return;
+    try {
+      await Share.share({
+        message: clip.summary,
+        title: clip.linkPreview?.title || "Анализ из Clip",
+      });
+    } catch {}
+  };
+
   const handleAnalyze = async () => {
-    if (!aiSettings?.aiApiKey || !aiSettings?.aiProvider) return;
+    if (!currentApiKey || !aiSettings?.aiProvider) return;
     const m = aiSettings.aiModules;
     const anyActive =
       m.keyIdeas || m.terms || m.aiPerspective || m.questions || m.practical;
@@ -199,7 +213,7 @@ export default function ClipDetailScreen() {
       const result = await summarizeContent(
         text,
         aiSettings.aiProvider,
-        aiSettings.aiApiKey,
+        currentApiKey,
         aiSettings.aiDepth,
         aiSettings.aiModules
       );
@@ -528,6 +542,16 @@ export default function ClipDetailScreen() {
       fontSize: 11,
       fontFamily: "Inter_500Medium",
     },
+    summaryActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 14,
+    },
+    summaryActionText: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontFamily: "Inter_500Medium",
+    },
     summaryParagraph: {
       color: colors.foreground,
       fontSize: 14,
@@ -754,17 +778,22 @@ export default function ClipDetailScreen() {
           <View style={s.summaryBlock}>
             <View style={s.summaryHeader}>
               <Text style={s.summaryTitle}>✦ AI-анализ</Text>
-              <TouchableOpacity
-                style={s.summaryRefresh}
-                onPress={handleAnalyze}
-                disabled={analyzing}
-              >
-                {analyzing ? (
-                  <ActivityIndicator size="small" color={colors.textMuted} />
-                ) : (
-                  <Text style={s.summaryRefreshText}>Обновить</Text>
-                )}
-              </TouchableOpacity>
+              <View style={s.summaryActions}>
+                <TouchableOpacity onPress={handleShareSummary}>
+                  <Text style={s.summaryActionText}>↗ Поделиться анализом</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={s.summaryRefresh}
+                  onPress={handleAnalyze}
+                  disabled={analyzing}
+                >
+                  {analyzing ? (
+                    <ActivityIndicator size="small" color={colors.textMuted} />
+                  ) : (
+                    <Text style={s.summaryRefreshText}>Обновить</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
             <View>
               {clip.summary.split("\n").map((line, idx) => {

@@ -25,6 +25,7 @@ import {
 } from "../src/notifications/digest";
 import {
   AiDepth,
+  AiKeys,
   AiModules,
   AiProvider,
   getSettings,
@@ -119,7 +120,13 @@ export default function SettingsScreen() {
 
   // AI settings state
   const [aiProvider, setAiProvider] = useState<AiProvider | null>(null);
-  const [aiApiKey, setAiApiKey] = useState<string>("");
+  const [aiKeys, setAiKeys] = useState<AiKeys>({
+    gemini: null,
+    claude: null,
+    openai: null,
+    deepseek: null,
+    yandex: null,
+  });
   const [aiKeyDraft, setAiKeyDraft] = useState<string>("");
   const [yandexFolderId, setYandexFolderId] = useState<string>("");
   const [yandexFolderDraft, setYandexFolderDraft] = useState<string>("");
@@ -131,15 +138,14 @@ export default function SettingsScreen() {
     questions: false,
     practical: false,
   });
-  const [keyJustSaved, setKeyJustSaved] = useState(false);
 
   useEffect(() => {
     (async () => {
       const st = await getSettings();
       setHour(st.notificationHour);
       setAiProvider(st.aiProvider);
-      setAiApiKey(st.aiApiKey ?? "");
-      setAiKeyDraft(st.aiApiKey ?? "");
+      setAiKeys(st.aiKeys);
+      setAiKeyDraft(st.aiProvider ? st.aiKeys[st.aiProvider] ?? "" : "");
       setAiDepth(st.aiDepth);
       setAiModules(st.aiModules);
       const folder = (await AsyncStorage.getItem(YANDEX_FOLDER_ID_KEY)) ?? "";
@@ -153,15 +159,20 @@ export default function SettingsScreen() {
     if (provider === aiProvider) return;
     Haptics.selectionAsync();
     setAiProvider(provider);
-    setKeyJustSaved(false);
+    setAiKeyDraft(aiKeys[provider] ?? "");
     await saveSettings({ aiProvider: provider });
   };
 
   const handleSaveApiKey = async () => {
+    if (!aiProvider) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const trimmed = aiKeyDraft.trim();
-    setAiApiKey(trimmed);
-    await saveSettings({ aiApiKey: trimmed.length > 0 ? trimmed : null });
+    const nextKeys: AiKeys = {
+      ...aiKeys,
+      [aiProvider]: trimmed.length > 0 ? trimmed : null,
+    };
+    setAiKeys(nextKeys);
+    await saveSettings({ aiKeys: nextKeys });
     if (aiProvider === "yandex") {
       const folderTrimmed = yandexFolderDraft.trim();
       setYandexFolderId(folderTrimmed);
@@ -171,7 +182,6 @@ export default function SettingsScreen() {
         await AsyncStorage.removeItem(YANDEX_FOLDER_ID_KEY);
       }
     }
-    setKeyJustSaved(true);
   };
 
   const handleDepthChoice = async (depth: AiDepth) => {
@@ -556,10 +566,7 @@ export default function SettingsScreen() {
             <View style={{ marginTop: 16 }}>
               <TextInput
                 value={aiKeyDraft}
-                onChangeText={(v) => {
-                  setAiKeyDraft(v);
-                  setKeyJustSaved(false);
-                }}
+                onChangeText={setAiKeyDraft}
                 placeholder={currentProvider.placeholder}
                 placeholderTextColor={colors.textMuted}
                 style={s.apiKeyInput}
@@ -570,10 +577,7 @@ export default function SettingsScreen() {
               {aiProvider === "yandex" && (
                 <TextInput
                   value={yandexFolderDraft}
-                  onChangeText={(v) => {
-                    setYandexFolderDraft(v);
-                    setKeyJustSaved(false);
-                  }}
+                  onChangeText={setYandexFolderDraft}
                   placeholder="b1g..."
                   placeholderTextColor={colors.textMuted}
                   style={[s.apiKeyInput, { marginTop: 8 }]}
@@ -588,8 +592,8 @@ export default function SettingsScreen() {
                 <Text style={s.saveKeyBtnText}>Сохранить</Text>
               </TouchableOpacity>
               <Text style={s.keyStatus}>
-                {keyJustSaved && aiApiKey
-                  ? aiProvider === "yandex"
+                {aiKeys[aiProvider]
+                  ? aiProvider === "yandex" && yandexFolderId
                     ? "Ключ и FolderID сохранены ✓"
                     : "Ключ сохранён ✓"
                   : ""}
