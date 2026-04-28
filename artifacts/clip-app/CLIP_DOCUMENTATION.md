@@ -148,6 +148,59 @@ Accept-Language: ru,en;q=0.9
 | `@clip:daily_cards` | ID карточек сегодняшнего дня |
 | `@clip:daily_date` | Дата последней генерации daily-карточек |
 | `@clip:yandex_folder_id` | FolderID для YandexGPT |
+| `@clip:tag_entries` | Справочник тегов (`TagEntry[]`) |
+
+## Справочник тегов
+
+Экран `app/tags.tsx` позволяет просматривать все теги, переименовывать их и добавлять примечания.
+
+### Структура TagEntry
+
+```ts
+interface TagEntry {
+  name: string;      // уникальное имя тега (без #)
+  note?: string;     // примечание пользователя (до 200 символов)
+  createdAt: string; // ISO-дата создания
+  count?: number;    // количество карточек — вычисляется, не хранится
+}
+```
+
+Хранится под ключом **`@clip:tag_entries`**.
+
+### Функции (src/storage/clips.ts)
+
+| Функция | Что делает |
+|---------|------------|
+| `getAllTagEntries()` | Возвращает все записи справочника |
+| `saveTagEntry(entry)` | Upsert: обновляет если уже есть, создаёт если нет (по имени) |
+| `deleteTagEntry(name)` | Удаляет TagEntry И убирает тег из всех карточек |
+| `renameTag(old, new)` | Переименовывает тег во всех карточках и в TagEntry |
+| `ensureTagEntries(tags[])` | Создаёт TagEntry для каждого нового тега (без дублей) |
+
+### Автосоздание
+
+`saveClip()` вызывает `ensureTagEntries(clip.tags)` после сохранения — все теги новой карточки автоматически появляются в справочнике.
+
+### Экран тегов (app/tags.tsx)
+
+- Список тегов, отсортированный по количеству карточек (убывание).
+- Каждая строка: `#тег` (accent, semibold) + счётчик (textMuted) + chevron; если есть примечание — показывается ниже (textSecondary, xs).
+- Нажатие → открывает `EditTagModal`.
+- При открытии экрана вызывается `ensureTagEntries` для синхронизации с текущими тегами всех карточек.
+
+### EditTagModal (src/components/EditTagModal.tsx)
+
+Bottom sheet с:
+1. Текущее имя тега крупно (`#название`, accent, 22px bold).
+2. TextInput «Переименовать тег» — поле с префиксом `#`, вводить без символа `#`.
+3. TextInput «Примечание» multiline, maxLength 200.
+4. Кнопка «Сохранить» (янтарная) → `renameTag` + `saveTagEntry` + обновление контекста.
+5. Кнопка «Удалить тег» (красная рамка) → Alert → `deleteTagEntry` (удаляет тег из всех карточек).
+
+### Входные точки
+
+- **Настройки** (`app/settings.tsx`, раздел «Данные»): кнопка «# Справочник тегов →» → `router.push("/tags")`.
+- **Архив** (`app/(tabs)/archive.tsx`): ссылка «Управление тегами →» (textMuted, xs) появляется под строкой тегов-фильтров когда тегов > 0 → `router.push("/tags")`.
 
 ## Голосовой ввод
 

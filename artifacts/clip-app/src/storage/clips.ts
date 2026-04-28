@@ -6,6 +6,7 @@ const SETTINGS_KEY = "@clip:settings";
 const DAILY_CARDS_KEY = "@clip:daily_cards";
 const DAILY_DATE_KEY = "@clip:daily_date";
 const DOMAINS_KEY = "@clip:domains";
+const TAG_ENTRIES_KEY = "@clip:tag_entries";
 
 export const FREE_LIMIT = 100;
 
@@ -33,6 +34,13 @@ export interface Domain {
   name: string;
   icon: string; // emoji
   createdAt: string;
+}
+
+export interface TagEntry {
+  name: string;      // unique tag name
+  note?: string;     // user note
+  createdAt: string; // ISO date
+  count?: number;    // computed, not stored
 }
 
 export type AiProvider = "gemini" | "claude" | "openai" | "deepseek" | "yandex";
@@ -109,6 +117,7 @@ export async function saveClip(
   clips.unshift(newClip);
   await AsyncStorage.setItem(CLIPS_KEY, JSON.stringify(clips));
   await updateStreak();
+  await ensureTagEntries(newClip.tags);
   return newClip;
 }
 
@@ -395,6 +404,81 @@ export async function getDomainClips(domainId: string): Promise<Clip[]> {
 export async function getInboxCount(): Promise<number> {
   const clips = await getAllClips();
   return clips.filter((c) => !c.domainId).length;
+}
+
+// ─────────────────────────── Tag Entries ────────────────────────
+
+export async function getAllTagEntries(): Promise<TagEntry[]> {
+  try {
+    const raw = await AsyncStorage.getItem(TAG_ENTRIES_KEY);
+    if (!raw) return [];
+    const entries: TagEntry[] = JSON.parse(raw);
+    return entries;
+  } catch {
+    return [];
+  }
+}
+
+export async function saveTagEntry(entry: TagEntry): Promise<void> {
+  const entries = await getAllTagEntries();
+  const idx = entries.findIndex((e) => e.name === entry.name);
+  if (idx >= 0) {
+    entries[idx] = { ...entries[idx], ...entry };
+  } else {
+    entries.push(entry);
+  }
+  await AsyncStorage.setItem(TAG_ENTRIES_KEY, JSON.stringify(entries));
+}
+
+export async function deleteTagEntry(name: string): Promise<void> {
+  const entries = await getAllTagEntries();
+  const filtered = entries.filter((e) => e.name !== name);
+  await AsyncStorage.setItem(TAG_ENTRIES_KEY, JSON.stringify(filtered));
+
+  const clips = await getAllClips();
+  const updatedClips = clips.map((c) => ({
+    ...c,
+    tags: c.tags.filter((t) => t !== name),
+  }));
+  await AsyncStorage.setItem(CLIPS_KEY, JSON.stringify(updatedClips));
+}
+
+export async function renameTag(
+  oldName: string,
+  newName: string
+): Promise<void> {
+  const trimmed = newName.trim();
+  if (!trimmed || trimmed === oldName) return;
+
+  const clips = await getAllClips();
+  const updatedClips = clips.map((c) => ({
+    ...c,
+    tags: c.tags.map((t) => (t === oldName ? trimmed : t)),
+  }));
+  await AsyncStorage.setItem(CLIPS_KEY, JSON.stringify(updatedClips));
+
+  const entries = await getAllTagEntries();
+  const updatedEntries = entries.map((e) =>
+    e.name === oldName ? { ...e, name: trimmed } : e
+  );
+  await AsyncStorage.setItem(TAG_ENTRIES_KEY, JSON.stringify(updatedEntries));
+}
+
+export async function ensureTagEntries(tags: string[]): Promise<void> {
+  if (tags.length === 0) return;
+  const entries = await getAllTagEntries();
+  const existingNames = new Set(entries.map((e) => e.name));
+  let changed = false;
+  for (const tag of tags) {
+    if (tag && !existingNames.has(tag)) {
+      entries.push({ name: tag, createdAt: new Date().toISOString() });
+      existingNames.add(tag);
+      changed = true;
+    }
+  }
+  if (changed) {
+    await AsyncStorage.setItem(TAG_ENTRIES_KEY, JSON.stringify(entries));
+  }
 }
 
 // ───────────────────────────────────────────────────────────────

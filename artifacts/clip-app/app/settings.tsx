@@ -595,6 +595,20 @@ export default function SettingsScreen() {
             </View>
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={s.exportBtn}
+            onPress={() => router.push("/tags")}
+          >
+            <Text style={{ fontSize: 16 }}>#</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.exportBtnText}>Справочник тегов</Text>
+              <Text style={s.exportBtnSub}>
+                Переименование и примечания к тегам
+              </Text>
+            </View>
+            <Text style={{ fontSize: 16, color: colors.textMuted }}>→</Text>
+          </TouchableOpacity>
+
           <View style={s.warningBox}>
             <Text style={s.warningText}>
               {"⚠ Данные хранятся локально. При удалении приложения все идеи будут удалены. Делай экспорт регулярно."}

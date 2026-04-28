@@ -251,56 +251,73 @@ export default function ArchiveScreen() {
           )}
         </View>
         {allTags.length > 0 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={s.tagsScroll}
-            contentContainerStyle={s.tagsContent}
-          >
-            {tags.map((tag) => {
-              const isAll = tag === "Все";
-              const isActive = isAll
-                ? activeTags.length === 0
-                : activeTags.includes(tag);
-              return (
-                <TouchableOpacity
-                  key={tag}
-                  onPress={() => {
-                    if (isAll) {
-                      Haptics.selectionAsync();
-                      setActiveTags([]);
-                    } else {
-                      toggleTag(tag);
-                    }
-                  }}
-                  style={[
-                    s.tagChip,
-                    {
-                      backgroundColor: isActive
-                        ? colors.accent
-                        : colors.bgCard,
-                      borderColor: isActive
-                        ? colors.accent
-                        : colors.border,
-                    },
-                  ]}
-                >
-                  <Text
+          <>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={s.tagsScroll}
+              contentContainerStyle={s.tagsContent}
+            >
+              {tags.map((tag) => {
+                const isAll = tag === "Все";
+                const isActive = isAll
+                  ? activeTags.length === 0
+                  : activeTags.includes(tag);
+                return (
+                  <TouchableOpacity
+                    key={tag}
+                    onPress={() => {
+                      if (isAll) {
+                        Haptics.selectionAsync();
+                        setActiveTags([]);
+                      } else {
+                        toggleTag(tag);
+                      }
+                    }}
                     style={[
-                      s.tagText,
+                      s.tagChip,
                       {
-                        color: isActive
-                          ? colors.primaryForeground
-                          : colors.textSecondary,
+                        backgroundColor: isActive
+                          ? colors.accent
+                          : colors.bgCard,
+                        borderColor: isActive
+                          ? colors.accent
+                          : colors.border,
                       },
                     ]}
                   >
-                    {isAll ? tag : `#${tag}`}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+                    <Text
+                      style={[
+                        s.tagText,
+                        {
+                          color: isActive
+                            ? colors.primaryForeground
+                            : colors.textSecondary,
+                        },
+                      ]}
+                    >
+                      {isAll ? tag : `#${tag}`}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TouchableOpacity
+              onPress={() => router.push("/tags")}
+              hitSlop={8}
+            >
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontFamily: "Inter_400Regular",
+                  color: colors.textMuted,
+                  textAlign: "right",
+                }}
+              >
+                Управление тегами →
+              </Text>
+            </TouchableOpacity>
+          </>
         )}
       </View>
 

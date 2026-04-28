@@ -1,0 +1,91 @@
+Добавь справочник тегов с возможностью 
+переименования и примечаний.
+
+ШАГ 1 — Структура тега (src/storage/clips.ts)
+
+Добавь тип TagEntry:
+interface TagEntry {
+  name: string        // уникальное имя тега
+  note?: string       // примечание пользователя
+  createdAt: string   // ISO дата
+  count?: number      // количество карточек (вычисляется)
+}
+
+AsyncStorage ключ: @clip:tag_entries
+
+Новые функции:
+  getAllTagEntries(): Promise<TagEntry[]>
+  saveTagEntry(entry: TagEntry): Promise<void>
+  deleteTagEntry(name: string): Promise<void>
+  
+  // Переименование тега — обновляет во всех карточках:
+  renameTag(oldName: string, newName: string): Promise<void>
+    // 1. Найти все clips где tags включает oldName
+    // 2. Заменить oldName на newName в каждой карточке
+    // 3. Обновить TagEntry с новым name
+    // 4. Сохранить всё
+
+  // При сохранении новой карточки с тегами —
+  // автоматически создавать TagEntry если не существует:
+  ensureTagEntries(tags: string[]): Promise<void>
+
+ШАГ 2 — Экран справочника тегов
+(app/tags.tsx — новый экран)
+
+Добавь в Expo Router как отдельный экран.
+
+Заголовок: "Теги"
+Кнопка назад: ← 
+
+Список всех тегов, отсортированных по количеству 
+карточек (больше — выше).
+
+Каждый тег в списке:
+┌─────────────────────────────────┐
+│ #психология              12 →  │
+│ заметки к книгам               │  ← примечание если есть
+└─────────────────────────────────┘
+
+Фон: bgCard, borderRadius md, padding md
+Название тега: accent, fontWeight semibold
+Счётчик карточек: textMuted, fontSize xs, справа
+Примечание: textSecondary, fontSize xs
+
+При нажатии на тег — открыть EditTagModal.
+
+ШАГ 3 — EditTagModal (src/components/EditTagModal.tsx)
+
+Modal снизу.
+
+Содержимое:
+- Текущее название тега крупно (#психология)
+- TextInput "Переименовать тег" с текущим названием
+  (без символа #, он добавляется автоматически)
+- TextInput "Примечание" multiline, placeholder:
+  "Для чего этот тег, как использую..."
+  maxLength: 200
+- Кнопка "Сохранить" янтарная
+- Кнопка "Удалить тег" красная внизу
+  При нажатии Alert:
+  "Удалить тег #психология?"
+  "Тег будет удалён из всех карточек"
+  [ 'Удалить', 'Отмена' ]
+
+ШАГ 4 — Вход в справочник тегов
+
+В app/settings.tsx в разделе "Данные" добавь кнопку:
+"# Справочник тегов →"
+router.push('/tags')
+
+В app/(tabs)/archive.tsx под списком тегов-фильтров
+добавь маленькую ссылку:
+"Управление тегами →" textMuted fontSize xs
+router.push('/tags')
+
+ШАГ 5 — Автосоздание TagEntry
+
+В функции saveClip() после сохранения карточки:
+await ensureTagEntries(clip.tags)
+
+Больше ничего не меняй.
+После выполнения обнови CLIP_DOCUMENTATION.md.
