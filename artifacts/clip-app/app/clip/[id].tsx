@@ -20,6 +20,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
+import AiOnboardingModal from "../../src/components/AiOnboardingModal";
 import CreateDomainModal from "../../src/components/CreateDomainModal";
 import DomainPickerModal from "../../src/components/DomainPickerModal";
 import TagPicker from "../../src/components/TagPicker";
@@ -60,6 +61,7 @@ export default function ClipDetailScreen() {
   } = useClips();
   const [domainPickerOpen, setDomainPickerOpen] = useState(false);
   const [createDomainOpen, setCreateDomainOpen] = useState(false);
+  const [showAiOnboarding, setShowAiOnboarding] = useState(false);
 
   const clip = useMemo(() => clips.find((c) => c.id === id), [clips, id]);
 
@@ -195,11 +197,23 @@ export default function ClipDetailScreen() {
   // Disable the analyze button when there's literally nothing to send —
   // matches the "⚠ Нет текста для анализа" indicator below.
   const hasAnalysisInput = buildAnalysisInput().trim().length > 0;
+  const hasAnalyzableContent =
+    hasAnalysisInput && (!!clip.linkPreview || clip.text.length > 200);
   const canAnalyze =
     !!currentApiKey &&
     !!aiSettings?.aiProvider &&
-    hasAnalysisInput &&
-    (!!clip.linkPreview || clip.text.length > 200);
+    hasAnalyzableContent;
+
+  // True only once settings have loaded and every provider key is blank.
+  const noKeyConfigured =
+    aiSettings !== null &&
+    !Object.values(aiSettings.aiKeys).some(
+      (v) => typeof v === "string" && v.trim().length > 0
+    );
+
+  // Show the onboarding CTA when there's something to analyse but no key set.
+  const showOnboardingButton =
+    hasAnalyzableContent && noKeyConfigured && !clip.summary;
 
   const handleShareSummary = async () => {
     if (!clip.summary) return;
@@ -961,6 +975,13 @@ export default function ClipDetailScreen() {
               );
             })()}
           </View>
+        ) : showOnboardingButton ? (
+          <TouchableOpacity
+            style={s.analyzeBtn}
+            onPress={() => setShowAiOnboarding(true)}
+          >
+            <Text style={s.analyzeBtnText}>✦ Анализировать</Text>
+          </TouchableOpacity>
         ) : null}
 
         <TouchableOpacity style={s.deleteBtn} onPress={handleDelete}>
@@ -987,6 +1008,11 @@ export default function ClipDetailScreen() {
           // Move the clip into the just-created domain right away.
           moveClip(clip.id, d.id);
         }}
+      />
+
+      <AiOnboardingModal
+        visible={showAiOnboarding}
+        onClose={() => setShowAiOnboarding(false)}
       />
     </View>
   );
