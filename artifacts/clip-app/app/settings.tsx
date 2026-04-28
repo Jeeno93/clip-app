@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -18,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
 import { useTheme } from "../src/context/ThemeContext";
+import { exportArchive } from "../src/utils/exportArchive";
 import {
   cancelDailyDigest,
   requestNotificationPermission,
@@ -117,6 +119,7 @@ export default function SettingsScreen() {
   const [hour, setHour] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingHour, setSavingHour] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // AI settings state
   const [aiProvider, setAiProvider] = useState<AiProvider | null>(null);
@@ -196,6 +199,17 @@ export default function SettingsScreen() {
     const next = { ...aiModules, [key]: !aiModules[key] };
     setAiModules(next);
     await saveSettings({ aiModules: next });
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await exportArchive();
+    } catch {
+      Alert.alert("Ошибка", "Не удалось экспортировать архив");
+    } finally {
+      setExporting(false);
+    }
   };
 
   const currentProvider = PROVIDERS.find((p) => p.value === aiProvider);
@@ -423,6 +437,43 @@ export default function SettingsScreen() {
       color: colors.foreground,
       flex: 1,
     },
+    exportBtn: {
+      backgroundColor: colors.bgCard,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    exportBtnText: {
+      fontSize: 15,
+      fontFamily: "Inter_500Medium",
+      color: colors.foreground,
+      flex: 1,
+    },
+    exportBtnSub: {
+      fontSize: 12,
+      fontFamily: "Inter_400Regular",
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+    warningBox: {
+      backgroundColor: colors.accentSubtle,
+      borderWidth: 1,
+      borderColor: colors.accentDim,
+      borderRadius: 10,
+      padding: 12,
+      gap: 4,
+    },
+    warningText: {
+      fontSize: 12,
+      fontFamily: "Inter_400Regular",
+      color: colors.textSecondary,
+      lineHeight: 18,
+    },
   });
 
   if (loading) {
@@ -519,6 +570,35 @@ export default function SettingsScreen() {
                   : `Активно: каждый день в ${formatHour(hour)}`}
               </Text>
             )}
+          </View>
+        </View>
+
+        {/* ── Data / export ── */}
+        <View style={s.section}>
+          <Text style={s.sectionLabel}>Данные</Text>
+
+          <TouchableOpacity
+            style={s.exportBtn}
+            onPress={handleExport}
+            disabled={exporting}
+          >
+            {exporting ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : (
+              <Text style={{ fontSize: 16 }}>↗</Text>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={s.exportBtnText}>Экспортировать архив</Text>
+              <Text style={s.exportBtnSub}>
+                Сохранить все идеи в текстовый файл
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <View style={s.warningBox}>
+            <Text style={s.warningText}>
+              {"⚠ Данные хранятся локально. При удалении приложения все идеи будут удалены. Делай экспорт регулярно."}
+            </Text>
           </View>
         </View>
 
