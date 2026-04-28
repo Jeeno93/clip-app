@@ -1,5 +1,7 @@
-import React, { useEffect, useRef } from "react";
+import * as Haptics from "expo-haptics";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
   Dimensions,
   Modal,
@@ -15,6 +17,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
 import { useClips } from "../context/ClipsContext";
+import type { Domain } from "../storage/clips";
+import EditDomainModal from "./EditDomainModal";
 
 export type ActiveDomain = string | null | "all";
 
@@ -38,10 +42,14 @@ export default function Sidebar({
 }: SidebarProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { domains, inboxCount } = useClips();
+  const { domains, inboxCount, removeDomain, deleteDomainWithClips } =
+    useClips();
 
   const translateX = useRef(new Animated.Value(-SIDEBAR_W)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
+
+  const [editingDomain, setEditingDomain] = useState<Domain | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -97,6 +105,32 @@ export default function Sidebar({
     })
   ).current;
 
+  const openEditModal = (domain: Domain) => {
+    setEditingDomain(domain);
+    setEditModalVisible(true);
+  };
+
+  const confirmDelete = (domain: Domain) => {
+    Alert.alert("Куда переместить идеи из этого домена?", "", [
+      {
+        text: "Во входящие",
+        onPress: () => {
+          removeDomain(domain.id);
+          if (activeDomainId === domain.id) onSelectDomain(null);
+        },
+      },
+      {
+        text: "Удалить вместе с доменом",
+        style: "destructive",
+        onPress: () => {
+          deleteDomainWithClips(domain.id);
+          if (activeDomainId === domain.id) onSelectDomain(null);
+        },
+      },
+      { text: "Отмена", style: "cancel" },
+    ]);
+  };
+
   const topPad = (Platform.OS === "web" ? insets.top + 67 : insets.top) + 14;
 
   const s = StyleSheet.create({
@@ -108,8 +142,6 @@ export default function Sidebar({
       position: "absolute",
       top: 0,
       bottom: 0,
-      // Constrain the overlay to the area to the right of the sidebar so
-      // taps/swipes on the sidebar itself are never intercepted.
       left: SIDEBAR_W,
       right: 0,
       backgroundColor: "rgba(0,0,0,0.5)",
@@ -185,7 +217,7 @@ export default function Sidebar({
     },
   });
 
-  const renderItem = (
+  const renderStaticItem = (
     iconStr: string,
     label: string,
     isActive: boolean,
@@ -208,82 +240,110 @@ export default function Sidebar({
   );
 
   return (
-    <Modal
-      visible={isOpen}
-      transparent
-      animationType="none"
-      onRequestClose={onClose}
-      statusBarTranslucent
-    >
-      <View style={s.overlay}>
-        {/* Overlay must render BEFORE the sidebar so the sidebar sits on top
-            in z-order. The overlay is constrained to the area to the right
-            of the sidebar so it never intercepts taps/swipes inside it. */}
-        <Animated.View
-          style={[s.overlayBg, { opacity: overlayOpacity }]}
-          pointerEvents={isOpen ? "auto" : "none"}
-        >
-          <TouchableOpacity
-            style={{ flex: 1 }}
-            activeOpacity={1}
-            onPress={onClose}
-          />
-        </Animated.View>
+    <>
+      <Modal
+        visible={isOpen}
+        transparent
+        animationType="none"
+        onRequestClose={onClose}
+        statusBarTranslucent
+      >
+        <View style={s.overlay}>
+          <Animated.View
+            style={[s.overlayBg, { opacity: overlayOpacity }]}
+            pointerEvents={isOpen ? "auto" : "none"}
+          >
+            <TouchableOpacity
+              style={{ flex: 1 }}
+              activeOpacity={1}
+              onPress={onClose}
+            />
+          </Animated.View>
 
-        <Animated.View
-          style={[
-            s.sidebar,
-            { transform: [{ translateX }] },
-          ]}
-          {...panResponder.panHandlers}
-        >
-          <Text style={s.appName}>✦ Clip</Text>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {renderItem(
-              "📥",
-              "Входящие",
-              activeDomainId === null,
-              () => onSelectDomain(null),
-              inboxCount
-            )}
-            {renderItem(
-              "📚",
-              "Все идеи",
-              activeDomainId === "all",
-              () => onSelectDomain("all")
-            )}
+          <Animated.View
+            style={[s.sidebar, { transform: [{ translateX }] }]}
+            {...panResponder.panHandlers}
+          >
+            <Text style={s.appName}>✦ Clip</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {renderStaticItem(
+                "📥",
+                "Входящие",
+                activeDomainId === null,
+                () => onSelectDomain(null),
+                inboxCount
+              )}
+              {renderStaticItem(
+                "📚",
+                "Все идеи",
+                activeDomainId === "all",
+                () => onSelectDomain("all")
+              )}
 
-            <Text style={s.sectionLabel}>Мои домены</Text>
+              <Text style={s.sectionLabel}>Мои домены</Text>
 
-            {domains.length === 0 ? (
-              <Text
-                style={{
-                  paddingHorizontal: 20,
-                  paddingVertical: 8,
-                  fontSize: 13,
-                  fontFamily: "Inter_400Regular",
-                  color: colors.textMuted,
-                }}
-              >
-                Пока нет доменов
-              </Text>
-            ) : (
-              domains.map((d) =>
-                renderItem(
-                  d.icon || "📁",
-                  d.name,
-                  activeDomainId === d.id,
-                  () => onSelectDomain(d.id)
-                )
-              )
-            )}
+              {domains.length === 0 ? (
+                <Text
+                  style={{
+                    paddingHorizontal: 20,
+                    paddingVertical: 8,
+                    fontSize: 13,
+                    fontFamily: "Inter_400Regular",
+                    color: colors.textMuted,
+                  }}
+                >
+                  Пока нет доменов
+                </Text>
+              ) : (
+                domains.map((d) => (
+                  <TouchableOpacity
+                    key={d.id}
+                    style={[s.item, activeDomainId === d.id && s.itemActive]}
+                    onPress={() => onSelectDomain(d.id)}
+                    onLongPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      Alert.alert(d.name, "", [
+                        {
+                          text: "Переименовать",
+                          onPress: () => openEditModal(d),
+                        },
+                        {
+                          text: "Удалить",
+                          style: "destructive",
+                          onPress: () => confirmDelete(d),
+                        },
+                        { text: "Отмена", style: "cancel" },
+                      ]);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={s.itemIcon}>{d.icon || "📁"}</Text>
+                    <Text
+                      style={[
+                        s.itemText,
+                        activeDomainId === d.id && s.itemTextActive,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {d.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              )}
 
-            <TouchableOpacity style={s.addBtn} onPress={onCreateDomain}>
-              <Text style={s.addText}>+ Новый домен</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </Animated.View>
-      </View>
-    </Modal>
+              <TouchableOpacity style={s.addBtn} onPress={onCreateDomain}>
+                <Text style={s.addText}>+ Новый домен</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </Animated.View>
+        </View>
+      </Modal>
+
+      <EditDomainModal
+        visible={editModalVisible}
+        domain={editingDomain}
+        onClose={() => setEditModalVisible(false)}
+      />
+    </>
   );
 }

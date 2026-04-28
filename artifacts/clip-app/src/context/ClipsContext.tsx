@@ -12,6 +12,7 @@ import {
   Streak,
   deleteClip,
   deleteDomain,
+  deleteDomainWithClips as deleteDomainWithClipsStorage,
   getAllClips,
   getAllDomains,
   getAllTags,
@@ -21,6 +22,7 @@ import {
   saveClip,
   saveDomain,
   updateClip,
+  updateDomain,
 } from "../storage/clips";
 
 interface ClipsContextType {
@@ -49,6 +51,8 @@ interface ClipsContextType {
   refresh: () => Promise<void>;
   createDomain: (data: Omit<Domain, "id" | "createdAt">) => Promise<Domain>;
   removeDomain: (id: string) => Promise<void>;
+  editDomain: (id: string, changes: Partial<Domain>) => Promise<void>;
+  deleteDomainWithClips: (domainId: string) => Promise<void>;
   moveClip: (clipId: string, domainId: string | null) => Promise<void>;
   refreshDomains: () => Promise<void>;
 }
@@ -180,6 +184,22 @@ export function ClipsProvider({ children }: { children: React.ReactNode }) {
     [loadAll]
   );
 
+  const editDomain = useCallback(
+    async (id: string, changes: Partial<Domain>) => {
+      await updateDomain(id, changes);
+      await refreshDomains();
+    },
+    [refreshDomains]
+  );
+
+  const deleteDomainWithClips = useCallback(
+    async (domainId: string) => {
+      await deleteDomainWithClipsStorage(domainId);
+      await loadAll();
+    },
+    [loadAll]
+  );
+
   const moveClip = useCallback(
     async (clipId: string, domainId: string | null) => {
       await moveClipToDomain(clipId, domainId);
@@ -211,6 +231,8 @@ export function ClipsProvider({ children }: { children: React.ReactNode }) {
         refresh: loadAll,
         createDomain,
         removeDomain,
+        editDomain,
+        deleteDomainWithClips,
         moveClip,
         refreshDomains,
       }}

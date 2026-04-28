@@ -18,43 +18,43 @@ import { DOMAIN_EMOJIS } from "../constants/domainEmojis";
 import { useClips } from "../context/ClipsContext";
 import type { Domain } from "../storage/clips";
 
-interface CreateDomainModalProps {
+interface EditDomainModalProps {
   visible: boolean;
+  domain: Domain | null;
   onClose: () => void;
-  onCreated?: (domain: Domain) => void;
 }
 
-export default function CreateDomainModal({
+export default function EditDomainModal({
   visible,
+  domain,
   onClose,
-  onCreated,
-}: CreateDomainModalProps) {
+}: EditDomainModalProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { createDomain } = useClips();
+  const { editDomain } = useClips();
 
   const [name, setName] = useState("");
   const [icon, setIcon] = useState(DOMAIN_EMOJIS[0]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (visible) {
-      setName("");
-      setIcon(DOMAIN_EMOJIS[0]);
+    if (visible && domain) {
+      setName(domain.name);
+      setIcon(domain.icon || DOMAIN_EMOJIS[0]);
       setSaving(false);
     }
-  }, [visible]);
+  }, [visible, domain]);
 
   const canSave = name.trim().length > 0 && !saving;
 
-  const handleCreate = async () => {
+  const handleSave = async () => {
+    if (!domain) return;
     const trimmed = name.trim();
     if (!trimmed) return;
     setSaving(true);
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      const created = await createDomain({ name: trimmed, icon });
-      onCreated?.(created);
+      await editDomain(domain.id, { name: trimmed, icon });
       onClose();
     } finally {
       setSaving(false);
@@ -138,13 +138,13 @@ export default function CreateDomainModal({
       marginTop: 18,
       marginBottom: 18,
     },
-    createBtn: {
+    saveBtn: {
       backgroundColor: colors.primary,
       borderRadius: 12,
       paddingVertical: 14,
       alignItems: "center",
     },
-    createBtnText: {
+    saveBtnText: {
       color: colors.primaryForeground,
       fontSize: 15,
       fontFamily: "Inter_600SemiBold",
@@ -171,7 +171,7 @@ export default function CreateDomainModal({
           <TouchableOpacity activeOpacity={1} onPress={() => {}}>
             <View style={s.sheet}>
               <View style={s.header}>
-                <Text style={s.title}>Новый домен</Text>
+                <Text style={s.title}>Редактировать домен</Text>
                 <TouchableOpacity onPress={onClose}>
                   <Text style={s.cancelText}>Отмена</Text>
                 </TouchableOpacity>
@@ -208,16 +208,16 @@ export default function CreateDomainModal({
                 maxLength={30}
                 autoFocus
                 returnKeyType="done"
-                onSubmitEditing={handleCreate}
+                onSubmitEditing={handleSave}
               />
 
               <TouchableOpacity
-                style={[s.createBtn, !canSave && { opacity: 0.5 }]}
-                onPress={handleCreate}
+                style={[s.saveBtn, !canSave && { opacity: 0.5 }]}
+                onPress={handleSave}
                 disabled={!canSave}
               >
-                <Text style={s.createBtnText}>
-                  {saving ? "Создаю..." : "Создать"}
+                <Text style={s.saveBtnText}>
+                  {saving ? "Сохраняю..." : "Сохранить"}
                 </Text>
               </TouchableOpacity>
             </View>

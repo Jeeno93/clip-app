@@ -354,6 +354,24 @@ export async function updateDomain(
   await AsyncStorage.setItem(DOMAINS_KEY, JSON.stringify(updated));
 }
 
+export async function moveClipsToInbox(domainId: string): Promise<void> {
+  const clips = await getAllClips();
+  const updated = clips.map((c) =>
+    c.domainId === domainId ? { ...c, domainId: undefined } : c
+  );
+  await AsyncStorage.setItem(CLIPS_KEY, JSON.stringify(updated));
+}
+
+export async function deleteDomainWithClips(domainId: string): Promise<void> {
+  const clips = await getAllClips();
+  const filteredClips = clips.filter((c) => c.domainId !== domainId);
+  await AsyncStorage.setItem(CLIPS_KEY, JSON.stringify(filteredClips));
+
+  const domains = await getAllDomains();
+  const filteredDomains = domains.filter((d) => d.id !== domainId);
+  await AsyncStorage.setItem(DOMAINS_KEY, JSON.stringify(filteredDomains));
+}
+
 export async function moveClipToDomain(
   clipId: string,
   domainId: string | null
