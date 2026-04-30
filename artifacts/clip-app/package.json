@@ -57,6 +57,7 @@
   },
   "dependencies": {
     "date-fns": "^3.6.0",
+    "expo-adi-registration": "^1.0.0",
     "expo-file-system": "~19.0.22",
     "expo-intent-launcher": "~13.0.8",
     "expo-notifications": "^0.32.16",

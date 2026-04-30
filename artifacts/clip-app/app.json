@@ -8,10 +8,6 @@
     "scheme": "clip-app",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
-    "assetBundlePatterns": [
-      "assets/*",
-      "assets/**/*"
-    ],
     "splash": {
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",
@@ -29,6 +25,12 @@
       "favicon": "./assets/images/icon.png"
     },
     "plugins": [
+      [
+        "expo-adi-registration",
+        {
+          "token": "CMQVMUUCZ3GGCAAAAAAAAAAAA"
+        }
+      ],
       [
         "expo-router",
         {
