@@ -8,6 +8,10 @@
     "scheme": "clip-app",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
+    "assetBundlePatterns": [
+      "assets/*",
+      "assets/**/*"
+    ],
     "splash": {
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",
