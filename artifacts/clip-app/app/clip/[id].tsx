@@ -26,7 +26,7 @@ import CreateDomainModal from "../../src/components/CreateDomainModal";
 import DomainPickerModal from "../../src/components/DomainPickerModal";
 import TagPicker from "../../src/components/TagPicker";
 import { useClips } from "../../src/context/ClipsContext";
-import { getSettings, Settings, AiModules } from "../../src/storage/clips";
+import { getSettings, Settings, AiModules, AiDepth } from "../../src/storage/clips";
 import { summarizeContent, getMaxTokens, SummarizeResult } from "../../src/utils/summarize";
 import { estimateCost, CostEstimate } from "../../src/utils/cost";
 
@@ -81,6 +81,7 @@ export default function ClipDetailScreen() {
   // AI analysis state
   const [aiSettings, setAiSettings] = useState<Settings | null>(null);
   const [localModules, setLocalModules] = useState<AiModules | null>(null);
+  const [localDepth, setLocalDepth] = useState<AiDepth | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [elapsed, setElapsed] = useState(0);
 
@@ -103,6 +104,7 @@ export default function ClipDetailScreen() {
         if (active) {
           setAiSettings(s);
           setLocalModules(s.aiModules);
+          setLocalDepth(s.aiDepth);
         }
       })();
       return () => {
@@ -249,10 +251,10 @@ export default function ClipDetailScreen() {
     return estimateCost(
       textLength,
       aiSettings.aiProvider,
-      aiSettings.aiDepth,
+      localDepth ?? aiSettings.aiDepth,
       localModules ?? aiSettings.aiModules
     );
-  }, [localModules, aiSettings?.aiDepth, aiSettings?.aiProvider, clip]);
+  }, [localDepth, localModules, aiSettings?.aiDepth, aiSettings?.aiProvider, clip]);
 
   const handleShareSummary = async () => {
     if (!clip.summary) return;
@@ -284,7 +286,7 @@ export default function ClipDetailScreen() {
         text,
         aiSettings.aiProvider,
         currentApiKey,
-        aiSettings.aiDepth,
+        localDepth ?? aiSettings.aiDepth,
         localModules ?? aiSettings.aiModules,
         overrideMaxTokens
       );
@@ -299,7 +301,7 @@ export default function ClipDetailScreen() {
       await editClipSummary(clip.id, result.text, result.truncated);
       if (result.truncated) {
         const currentMax = getMaxTokens(
-          aiSettings.aiDepth,
+          localDepth ?? aiSettings.aiDepth,
           localModules ?? aiSettings.aiModules
         );
         const extendedMax = Math.min(currentMax * 2, 16000);
@@ -744,6 +746,46 @@ export default function ClipDetailScreen() {
       textAlign: "right",
       marginBottom: 2,
     },
+    depthBlock: {
+      gap: 6,
+    },
+    depthLabel: {
+      fontSize: 11,
+      fontFamily: "Inter_500Medium",
+      color: colors.textMuted,
+      textTransform: "uppercase",
+      letterSpacing: 1,
+      marginBottom: 2,
+    },
+    depthRow: {
+      flexDirection: "row",
+      gap: 6,
+    },
+    depthBtn: {
+      flex: 1,
+      paddingVertical: 7,
+      borderRadius: 8,
+      borderWidth: 1,
+      alignItems: "center",
+    },
+    depthBtnActive: {
+      backgroundColor: colors.accentSubtle,
+      borderColor: colors.accent,
+    },
+    depthBtnInactive: {
+      backgroundColor: "transparent",
+      borderColor: colors.border,
+    },
+    depthBtnTextActive: {
+      fontSize: 13,
+      fontFamily: "Inter_600SemiBold",
+      color: colors.accent,
+    },
+    depthBtnTextInactive: {
+      fontSize: 13,
+      fontFamily: "Inter_400Regular",
+      color: colors.textSecondary,
+    },
     deleteBtn: {
       flexDirection: "row",
       alignItems: "center",
@@ -1086,6 +1128,36 @@ export default function ClipDetailScreen() {
                       </TouchableOpacity>
                     );
                   })}
+                </View>
+              );
+            })()}
+
+            {localDepth !== null && (() => {
+              const DEPTHS: { key: AiDepth; label: string }[] = [
+                { key: "quick",    label: "Быстро" },
+                { key: "standard", label: "Стандарт" },
+                { key: "deep",     label: "Глубоко" },
+              ];
+              return (
+                <View style={s.depthBlock}>
+                  <Text style={s.depthLabel}>Глубина:</Text>
+                  <View style={s.depthRow}>
+                    {DEPTHS.map(({ key, label }) => {
+                      const active = localDepth === key;
+                      return (
+                        <TouchableOpacity
+                          key={key}
+                          style={[s.depthBtn, active ? s.depthBtnActive : s.depthBtnInactive]}
+                          onPress={() => setLocalDepth(key)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={active ? s.depthBtnTextActive : s.depthBtnTextInactive}>
+                            {label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                 </View>
               );
             })()}
