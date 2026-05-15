@@ -26,7 +26,7 @@ import CreateDomainModal from "../../src/components/CreateDomainModal";
 import DomainPickerModal from "../../src/components/DomainPickerModal";
 import TagPicker from "../../src/components/TagPicker";
 import { useClips } from "../../src/context/ClipsContext";
-import { getSettings, Settings } from "../../src/storage/clips";
+import { getSettings, Settings, AiModules } from "../../src/storage/clips";
 import { summarizeContent } from "../../src/utils/summarize";
 
 function getDomain(url: string): string {
@@ -79,6 +79,7 @@ export default function ClipDetailScreen() {
 
   // AI analysis state
   const [aiSettings, setAiSettings] = useState<Settings | null>(null);
+  const [localModules, setLocalModules] = useState<AiModules | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [elapsed, setElapsed] = useState(0);
 
@@ -98,13 +99,22 @@ export default function ClipDetailScreen() {
       let active = true;
       (async () => {
         const s = await getSettings();
-        if (active) setAiSettings(s);
+        if (active) {
+          setAiSettings(s);
+          setLocalModules(s.aiModules);
+        }
       })();
       return () => {
         active = false;
       };
     }, [])
   );
+
+  const toggleModule = (key: keyof AiModules) => {
+    setLocalModules((prev) =>
+      prev ? { ...prev, [key]: !prev[key] } : prev
+    );
+  };
 
   useEffect(() => {
     if (clip) {
@@ -240,7 +250,7 @@ export default function ClipDetailScreen() {
 
   const handleAnalyze = async () => {
     if (!currentApiKey || !aiSettings?.aiProvider) return;
-    const m = aiSettings.aiModules;
+    const m = localModules ?? aiSettings.aiModules;
     const anyActive =
       m.keyIdeas || m.terms || m.aiPerspective || m.questions || m.practical;
     if (!anyActive) {
@@ -259,7 +269,7 @@ export default function ClipDetailScreen() {
         aiSettings.aiProvider,
         currentApiKey,
         aiSettings.aiDepth,
-        aiSettings.aiModules
+        localModules ?? aiSettings.aiModules
       );
       if (result === "AUTH_ERROR") {
         Alert.alert("Ошибка", "Неверный API ключ. Проверь настройки.");
@@ -664,6 +674,50 @@ export default function ClipDetailScreen() {
       textAlign: "center",
       marginTop: 4,
     },
+    modulesBlock: {
+      gap: 6,
+    },
+    modulesLabel: {
+      fontSize: 11,
+      fontFamily: "Inter_500Medium",
+      color: colors.textMuted,
+      textTransform: "uppercase",
+      letterSpacing: 1,
+      marginBottom: 2,
+    },
+    moduleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingVertical: 4,
+    },
+    moduleCheckbox: {
+      width: 18,
+      height: 18,
+      borderRadius: 4,
+      borderWidth: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    moduleCheckboxActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    moduleCheckboxInactive: {
+      backgroundColor: "transparent",
+      borderColor: colors.border,
+    },
+    moduleCheckmark: {
+      color: "#fff",
+      fontSize: 12,
+      fontFamily: "Inter_700Bold",
+      lineHeight: 14,
+    },
+    moduleText: {
+      fontSize: 14,
+      fontFamily: "Inter_400Regular",
+      color: colors.foreground,
+    },
     deleteBtn: {
       flexDirection: "row",
       alignItems: "center",
@@ -954,23 +1008,6 @@ export default function ClipDetailScreen() {
           </View>
         ) : canAnalyze ? (
           <View style={{ gap: 6 }}>
-            <TouchableOpacity
-              style={s.analyzeBtn}
-              onPress={handleAnalyze}
-              disabled={analyzing}
-            >
-              {analyzing ? (
-                <>
-                  <ActivityIndicator size="small" color={colors.accent} />
-                  <Text style={s.analyzeBtnText}>Анализирую...</Text>
-                </>
-              ) : (
-                <Text style={s.analyzeBtnText}>✦ Анализировать</Text>
-              )}
-            </TouchableOpacity>
-            {analyzing && (
-              <Text style={s.elapsedText}>⏱ {elapsed} сек</Text>
-            )}
             {clip.linkPreview && (() => {
               // Three quality levels for the analysis input:
               //   1) full article text loaded   → success colour
@@ -997,6 +1034,60 @@ export default function ClipDetailScreen() {
                 </Text>
               );
             })()}
+
+            {localModules !== null && (() => {
+              const MODULE_LIST: { key: keyof AiModules; label: string }[] = [
+                { key: "keyIdeas",      label: "Ключевые идеи" },
+                { key: "terms",         label: "Термины и понятия" },
+                { key: "aiPerspective", label: "Взгляд AI" },
+                { key: "questions",     label: "Вопросы для размышления" },
+                { key: "practical",     label: "Практическое применение" },
+              ];
+              return (
+                <View style={s.modulesBlock}>
+                  <Text style={s.modulesLabel}>Что анализировать:</Text>
+                  {MODULE_LIST.map(({ key, label }) => {
+                    const active = localModules[key];
+                    return (
+                      <TouchableOpacity
+                        key={key}
+                        style={s.moduleRow}
+                        onPress={() => toggleModule(key)}
+                        activeOpacity={0.7}
+                      >
+                        <View
+                          style={[
+                            s.moduleCheckbox,
+                            active ? s.moduleCheckboxActive : s.moduleCheckboxInactive,
+                          ]}
+                        >
+                          {active && <Text style={s.moduleCheckmark}>✓</Text>}
+                        </View>
+                        <Text style={s.moduleText}>{label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              );
+            })()}
+
+            <TouchableOpacity
+              style={s.analyzeBtn}
+              onPress={handleAnalyze}
+              disabled={analyzing}
+            >
+              {analyzing ? (
+                <>
+                  <ActivityIndicator size="small" color={colors.accent} />
+                  <Text style={s.analyzeBtnText}>Анализирую...</Text>
+                </>
+              ) : (
+                <Text style={s.analyzeBtnText}>✦ Анализировать</Text>
+              )}
+            </TouchableOpacity>
+            {analyzing && (
+              <Text style={s.elapsedText}>⏱ {elapsed} сек</Text>
+            )}
           </View>
         ) : showOnboardingButton ? (
           <TouchableOpacity
