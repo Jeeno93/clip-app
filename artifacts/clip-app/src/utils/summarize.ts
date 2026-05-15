@@ -61,6 +61,16 @@ export function smartTruncate(text: string, limit: number): string {
   return startClean + TRUNCATE_MARKER + endClean;
 }
 
+function getMaxTokens(
+  depth: "quick" | "standard" | "deep",
+  modules: AiModules
+): number {
+  const activeModules = Object.values(modules).filter(Boolean).length;
+  const base = { quick: 800, standard: 1500, deep: 2500 }[depth];
+  const extra = Math.max(0, activeModules - 1) * 400;
+  return Math.min(base + extra, 4000);
+}
+
 function depthInstruction(depth: AiDepth): string {
   switch (depth) {
     case "quick":
@@ -80,7 +90,7 @@ function buildUserPrompt(text: string, modules: AiModules): string {
   const sections: string[] = [];
   if (modules.keyIdeas) {
     sections.push(
-      "**Ключевые идеи**\nВыдели главные мысли автора. Сколько идей — столько сколько есть, не больше и не меньше."
+      "**Ключевые идеи**\nДля каждой ключевой идеи пиши по структуре:\n- Одно предложение: что утверждает автор\n- 2-3 предложения: почему это неочевидно или удивительно, какой контекст объясняет эту идею\n- Одно предложение: почему это важно или что это меняет\n\nНе просто называй идею — объясняй её так, чтобы человек который не читал статью почувствовал «ааа, понял» а не «ну и что». Избегай голых тезисов без раскрытия."
     );
   }
   if (modules.terms) {
@@ -123,7 +133,8 @@ async function fetchWithTimeout(
 async function callGemini(
   apiKey: string,
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  maxTokens: number
 ): Promise<string | null> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
   const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
@@ -132,7 +143,7 @@ async function callGemini(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ parts: [{ text: fullPrompt }] }],
-      generationConfig: { maxOutputTokens: 1500 },
+      generationConfig: { maxOutputTokens: maxTokens },
     }),
   });
   if (res.status === 401 || res.status === 403) return "AUTH_ERROR";
@@ -147,7 +158,8 @@ async function callGemini(
 async function callClaude(
   apiKey: string,
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  maxTokens: number
 ): Promise<string | null> {
   const url = "https://api.anthropic.com/v1/messages";
   const res = await fetchWithTimeout(url, {
@@ -159,7 +171,7 @@ async function callClaude(
     },
     body: JSON.stringify({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 1500,
+      max_tokens: maxTokens,
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
     }),
@@ -176,7 +188,8 @@ async function callClaude(
 async function callOpenAI(
   apiKey: string,
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  maxTokens: number
 ): Promise<string | null> {
   const url = "https://api.openai.com/v1/chat/completions";
   const res = await fetchWithTimeout(url, {
@@ -187,7 +200,7 @@ async function callOpenAI(
     },
     body: JSON.stringify({
       model: "gpt-4o-mini",
-      max_tokens: 1500,
+      max_tokens: maxTokens,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -206,7 +219,8 @@ async function callOpenAI(
 async function callDeepSeek(
   apiKey: string,
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  maxTokens: number
 ): Promise<string | null> {
   const url = "https://api.deepseek.com/chat/completions";
   const res = await fetchWithTimeout(url, {
@@ -217,7 +231,7 @@ async function callDeepSeek(
     },
     body: JSON.stringify({
       model: "deepseek-chat",
-      max_tokens: 1500,
+      max_tokens: maxTokens,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -236,7 +250,8 @@ async function callDeepSeek(
 async function callYandex(
   apiKey: string,
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  maxTokens: number
 ): Promise<string | null> {
   const folderId = (await AsyncStorage.getItem(YANDEX_FOLDER_ID_KEY))?.trim();
   if (!folderId) {
@@ -254,7 +269,7 @@ async function callYandex(
       completionOptions: {
         stream: false,
         temperature: 0.6,
-        maxTokens: "1500",
+        maxTokens: String(maxTokens),
       },
       messages: [
         { role: "system", text: systemPrompt },
@@ -294,22 +309,23 @@ export async function summarizeContent(
 
   const systemPrompt = buildSystemPrompt(depth);
   const userPrompt = buildUserPrompt(truncatedText, modules);
+  const maxTokens = getMaxTokens(depth, modules);
 
   try {
     if (provider === "gemini") {
-      return await callGemini(apiKey, systemPrompt, userPrompt);
+      return await callGemini(apiKey, systemPrompt, userPrompt, maxTokens);
     }
     if (provider === "claude") {
-      return await callClaude(apiKey, systemPrompt, userPrompt);
+      return await callClaude(apiKey, systemPrompt, userPrompt, maxTokens);
     }
     if (provider === "openai") {
-      return await callOpenAI(apiKey, systemPrompt, userPrompt);
+      return await callOpenAI(apiKey, systemPrompt, userPrompt, maxTokens);
     }
     if (provider === "deepseek") {
-      return await callDeepSeek(apiKey, systemPrompt, userPrompt);
+      return await callDeepSeek(apiKey, systemPrompt, userPrompt, maxTokens);
     }
     if (provider === "yandex") {
-      return await callYandex(apiKey, systemPrompt, userPrompt);
+      return await callYandex(apiKey, systemPrompt, userPrompt, maxTokens);
     }
     return null;
   } catch (error: any) {
