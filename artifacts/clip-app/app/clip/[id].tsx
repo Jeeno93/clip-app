@@ -80,6 +80,18 @@ export default function ClipDetailScreen() {
   // AI analysis state
   const [aiSettings, setAiSettings] = useState<Settings | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!analyzing) {
+      setElapsed(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setElapsed((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [analyzing]);
 
   useFocusEffect(
     useCallback(() => {
@@ -632,6 +644,26 @@ export default function ClipDetailScreen() {
       fontFamily: "Inter_700Bold",
       marginTop: 4,
     },
+    truncatedWarning: {
+      backgroundColor: colors.accentSubtle,
+      borderWidth: 1,
+      borderColor: colors.accentDim,
+      borderRadius: 8,
+      padding: 6,
+      marginTop: 4,
+    },
+    truncatedText: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontFamily: "Inter_400Regular",
+    },
+    elapsedText: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontFamily: "Inter_400Regular",
+      textAlign: "center",
+      marginTop: 4,
+    },
     deleteBtn: {
       flexDirection: "row",
       alignItems: "center",
@@ -912,6 +944,13 @@ export default function ClipDetailScreen() {
               </View>
             </View>
             <MarkdownText text={clip.summary} />
+            {!/[.!?»)\]—]$/.test(clip.summary.trimEnd()) && (
+              <View style={s.truncatedWarning}>
+                <Text style={s.truncatedText}>
+                  ⚠ Анализ мог быть обрезан. Попробуй уменьшить глубину или число модулей в настройках.
+                </Text>
+              </View>
+            )}
           </View>
         ) : canAnalyze ? (
           <View style={{ gap: 6 }}>
@@ -929,6 +968,9 @@ export default function ClipDetailScreen() {
                 <Text style={s.analyzeBtnText}>✦ Анализировать</Text>
               )}
             </TouchableOpacity>
+            {analyzing && (
+              <Text style={s.elapsedText}>⏱ {elapsed} сек</Text>
+            )}
             {clip.linkPreview && (() => {
               // Three quality levels for the analysis input:
               //   1) full article text loaded   → success colour
