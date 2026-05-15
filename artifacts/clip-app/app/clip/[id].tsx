@@ -28,6 +28,7 @@ import TagPicker from "../../src/components/TagPicker";
 import { useClips } from "../../src/context/ClipsContext";
 import { getSettings, Settings, AiModules } from "../../src/storage/clips";
 import { summarizeContent } from "../../src/utils/summarize";
+import { estimateCost, CostEstimate } from "../../src/utils/cost";
 
 function getDomain(url: string): string {
   try {
@@ -237,6 +238,21 @@ export default function ClipDetailScreen() {
   // Show the onboarding CTA when there's something to analyse but no key set.
   const showOnboardingButton =
     hasAnalyzableContent && noKeyConfigured && !clip.summary;
+
+  const costEstimate = useMemo<CostEstimate | null>(() => {
+    const textLength =
+      clip.linkPreview?.fullText?.length ??
+      clip.linkPreview?.description?.length ??
+      clip.text?.length ??
+      0;
+    if (!textLength || !aiSettings?.aiProvider) return null;
+    return estimateCost(
+      textLength,
+      aiSettings.aiProvider,
+      aiSettings.aiDepth,
+      localModules ?? aiSettings.aiModules
+    );
+  }, [localModules, aiSettings?.aiDepth, aiSettings?.aiProvider, clip]);
 
   const handleShareSummary = async () => {
     if (!clip.summary) return;
@@ -718,6 +734,13 @@ export default function ClipDetailScreen() {
       fontFamily: "Inter_400Regular",
       color: colors.foreground,
     },
+    costEstimateText: {
+      fontSize: 11,
+      fontFamily: "Inter_400Regular",
+      color: colors.textMuted,
+      textAlign: "right",
+      marginBottom: 2,
+    },
     deleteBtn: {
       flexDirection: "row",
       alignItems: "center",
@@ -1070,6 +1093,15 @@ export default function ClipDetailScreen() {
                 </View>
               );
             })()}
+
+            {costEstimate !== null && (
+              <Text style={s.costEstimateText}>
+                {costEstimate.rub < 0.01
+                  ? "~< 0.01 ₽"
+                  : `~${costEstimate.rub} ₽`}
+                {" · "}{costEstimate.tokens.toLocaleString("ru-RU")} токенов
+              </Text>
+            )}
 
             <TouchableOpacity
               style={s.analyzeBtn}

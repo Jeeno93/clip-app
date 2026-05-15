@@ -1,0 +1,89 @@
+В app/clip/[id].tsx добавь расчёт и отображение 
+примерной стоимости анализа.
+
+ШАГ 1 — Функция расчёта стоимости
+
+Создай в том же файле (или в src/utils/cost.ts) 
+функцию:
+
+interface CostEstimate {
+  tokens: number      // примерное кол-во токенов
+  usd: number         // стоимость в долларах
+  rub: number         // стоимость в рублях (курс 90)
+}
+
+// Цены за 1M токенов (вход + выход усреднённо)
+const PROVIDER_PRICES_USD: Record<string, number> = {
+  deepseek: 0.27,   // $0.27 за 1M (смешанная цена)
+  gemini: 0.10,     // $0.10 за 1M flash
+  claude: 0.80,     // $0.80 за 1M haiku
+  openai: 0.15,     // $0.15 за 1M gpt-4o-mini
+  yandex: 0.20,     // примерно
+}
+
+function estimateCost(
+  textLength: number,
+  provider: string,
+  depth: AiDepth,
+  modules: AiModules
+): CostEstimate {
+  // Входящие токены: текст / 3 (1 токен ≈ 3 символа для кириллицы)
+  const inputTokens = Math.round(textLength / 3)
+  
+  // Исходящие токены: getMaxTokens(depth, modules) / 2 (средний ответ)
+  const outputTokens = Math.round(
+    getMaxTokens(depth, modules) / 2
+  )
+  
+  const totalTokens = inputTokens + outputTokens
+  const pricePerMillion = PROVIDER_PRICES_USD[provider] ?? 0.30
+  const usd = (totalTokens / 1_000_000) * pricePerMillion
+  const rub = usd * 90
+
+  return {
+    tokens: totalTokens,
+    usd: Math.round(usd * 10000) / 10000,  // 4 знака
+    rub: Math.round(rub * 100) / 100,       // 2 знака
+  }
+}
+
+ШАГ 2 — Показывать стоимость
+
+Стоимость пересчитывается при изменении:
+- localModules (при переключении галочек)
+- settings.aiDepth
+- текста карточки
+
+Использовать useMemo:
+const costEstimate = useMemo(() => {
+  const textLength = clip.linkPreview?.fullText?.length 
+    ?? clip.linkPreview?.description?.length 
+    ?? clip.text?.length 
+    ?? 0
+  if (!textLength || !settings.aiProvider) return null
+  return estimateCost(
+    textLength,
+    settings.aiProvider,
+    settings.aiDepth,
+    localModules ?? settings.aiModules
+  )
+}, [localModules, settings.aiDepth, settings.aiProvider, clip])
+
+Показывать под блоком галочек, перед кнопкой:
+
+Если costEstimate !== null:
+<Text style={styles.costEstimate}>
+  ~{costEstimate.rub < 0.01 
+    ? '< 0.01 ₽' 
+    : `${costEstimate.rub} ₽`}
+  {' · '}{costEstimate.tokens.toLocaleString('ru-RU')} токенов
+</Text>
+
+Стиль: fontSize xs, color textMuted, 
+textAlign right, marginBottom spacing.xs
+
+Это НЕ гарантированная стоимость — 
+только ориентир. Пользователь это понимает 
+по символу ~.
+
+Больше ничего не меняй.

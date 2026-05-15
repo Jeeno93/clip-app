@@ -61,7 +61,7 @@ export function smartTruncate(text: string, limit: number): string {
   return startClean + TRUNCATE_MARKER + endClean;
 }
 
-function getMaxTokens(
+export function getMaxTokens(
   depth: "quick" | "standard" | "deep",
   modules: AiModules
 ): number {
