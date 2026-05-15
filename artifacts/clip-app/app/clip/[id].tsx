@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
 import AiOnboardingModal from "../../src/components/AiOnboardingModal";
+import MarkdownText from "../../src/components/MarkdownText";
 import CreateDomainModal from "../../src/components/CreateDomainModal";
 import DomainPickerModal from "../../src/components/DomainPickerModal";
 import TagPicker from "../../src/components/TagPicker";
@@ -910,27 +911,7 @@ export default function ClipDetailScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-            <View>
-              {clip.summary.split("\n").map((line, idx) => {
-                const trimmed = line.trim();
-                if (trimmed.length === 0) {
-                  return <View key={idx} style={{ height: 6 }} />;
-                }
-                const headingMatch = trimmed.match(/^\*\*(.+?)\*\*:?\s*$/);
-                if (headingMatch) {
-                  return (
-                    <Text key={idx} style={s.summaryHeading}>
-                      {headingMatch[1]}
-                    </Text>
-                  );
-                }
-                return (
-                  <Text key={idx} style={s.summaryParagraph}>
-                    {trimmed.replace(/\*\*/g, "")}
-                  </Text>
-                );
-              })}
-            </View>
+            <MarkdownText text={clip.summary} />
           </View>
         ) : canAnalyze ? (
           <View style={{ gap: 6 }}>
