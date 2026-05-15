@@ -45,7 +45,7 @@ interface ClipsContextType {
   removeClip: (id: string) => Promise<void>;
   editClipTags: (id: string, tags: string[]) => Promise<void>;
   editClipText: (id: string, text: string, title?: string) => Promise<void>;
-  editClipSummary: (id: string, summary: string) => Promise<void>;
+  editClipSummary: (id: string, summary: string, truncated?: boolean) => Promise<void>;
   getRandomOne: () => Clip | null;
   refreshDailyCards: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -145,8 +145,8 @@ export function ClipsProvider({ children }: { children: React.ReactNode }) {
   );
 
   const editClipSummary = useCallback(
-    async (id: string, summary: string) => {
-      await updateClip(id, { summary });
+    async (id: string, summary: string, truncated?: boolean) => {
+      await updateClip(id, { summary, summaryTruncated: truncated });
       await loadAll();
     },
     [loadAll]

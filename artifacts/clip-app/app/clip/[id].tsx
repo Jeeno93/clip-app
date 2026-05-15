@@ -27,7 +27,7 @@ import DomainPickerModal from "../../src/components/DomainPickerModal";
 import TagPicker from "../../src/components/TagPicker";
 import { useClips } from "../../src/context/ClipsContext";
 import { getSettings, Settings, AiModules } from "../../src/storage/clips";
-import { summarizeContent } from "../../src/utils/summarize";
+import { summarizeContent, getMaxTokens, SummarizeResult } from "../../src/utils/summarize";
 import { estimateCost, CostEstimate } from "../../src/utils/cost";
 
 function getDomain(url: string): string {
@@ -264,7 +264,7 @@ export default function ClipDetailScreen() {
     } catch {}
   };
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = async (overrideMaxTokens?: number) => {
     if (!currentApiKey || !aiSettings?.aiProvider) return;
     const m = localModules ?? aiSettings.aiModules;
     const anyActive =
@@ -285,7 +285,8 @@ export default function ClipDetailScreen() {
         aiSettings.aiProvider,
         currentApiKey,
         aiSettings.aiDepth,
-        localModules ?? aiSettings.aiModules
+        localModules ?? aiSettings.aiModules,
+        overrideMaxTokens
       );
       if (result === "AUTH_ERROR") {
         Alert.alert("Ошибка", "Неверный API ключ. Проверь настройки.");
@@ -295,7 +296,22 @@ export default function ClipDetailScreen() {
         Alert.alert("Ошибка", "Не удалось получить ответ. Попробуй позже.");
         return;
       }
-      await editClipSummary(clip.id, result);
+      await editClipSummary(clip.id, result.text, result.truncated);
+      if (result.truncated) {
+        const currentMax = getMaxTokens(
+          aiSettings.aiDepth,
+          localModules ?? aiSettings.aiModules
+        );
+        const extendedMax = Math.min(currentMax * 2, 16000);
+        Alert.alert(
+          "Анализ был обрезан",
+          "Материал длиннее стандартного лимита. Повторить анализ с увеличенным лимитом? Это потребует примерно вдвое больше токенов.",
+          [
+            { text: "Повторить", onPress: () => handleAnalyze(extendedMax) },
+            { text: "Оставить как есть", style: "cancel" },
+          ]
+        );
+      }
     } catch (error: any) {
       Alert.alert("Ошибка AI", error?.message || "Неизвестная ошибка");
     } finally {
@@ -670,19 +686,6 @@ export default function ClipDetailScreen() {
       fontFamily: "Inter_700Bold",
       marginTop: 4,
     },
-    truncatedWarning: {
-      backgroundColor: colors.accentSubtle,
-      borderWidth: 1,
-      borderColor: colors.accentDim,
-      borderRadius: 8,
-      padding: 6,
-      marginTop: 4,
-    },
-    truncatedText: {
-      color: colors.textMuted,
-      fontSize: 11,
-      fontFamily: "Inter_400Regular",
-    },
     elapsedText: {
       color: colors.textMuted,
       fontSize: 11,
@@ -1009,7 +1012,7 @@ export default function ClipDetailScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={s.summaryRefresh}
-                  onPress={handleAnalyze}
+                  onPress={() => handleAnalyze()}
                   disabled={analyzing}
                 >
                   {analyzing ? (
@@ -1021,13 +1024,6 @@ export default function ClipDetailScreen() {
               </View>
             </View>
             <MarkdownText text={clip.summary} />
-            {!/[.!?»)\]—]$/.test(clip.summary.trimEnd()) && (
-              <View style={s.truncatedWarning}>
-                <Text style={s.truncatedText}>
-                  ⚠ Анализ мог быть обрезан. Попробуй уменьшить глубину или число модулей в настройках.
-                </Text>
-              </View>
-            )}
           </View>
         ) : canAnalyze ? (
           <View style={{ gap: 6 }}>
@@ -1105,7 +1101,7 @@ export default function ClipDetailScreen() {
 
             <TouchableOpacity
               style={s.analyzeBtn}
-              onPress={handleAnalyze}
+              onPress={() => handleAnalyze()}
               disabled={analyzing}
             >
               {analyzing ? (

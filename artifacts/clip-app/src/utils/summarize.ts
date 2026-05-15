@@ -130,12 +130,19 @@ async function fetchWithTimeout(
   }
 }
 
+export interface SummarizeResult {
+  text: string;
+  truncated: boolean;
+}
+
+type ProviderResult = SummarizeResult | "AUTH_ERROR" | null;
+
 async function callGemini(
   apiKey: string,
   systemPrompt: string,
   userPrompt: string,
   maxTokens: number
-): Promise<string | null> {
+): Promise<ProviderResult> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
   const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
   const res = await fetchWithTimeout(url, {
@@ -152,7 +159,9 @@ async function callGemini(
     throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
   }
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  return typeof text === "string" && text.trim() ? text.trim() : null;
+  const finishReason = data?.candidates?.[0]?.finishReason;
+  const truncated = finishReason === "MAX_TOKENS";
+  return typeof text === "string" && text.trim() ? { text: text.trim(), truncated } : null;
 }
 
 async function callClaude(
@@ -160,7 +169,7 @@ async function callClaude(
   systemPrompt: string,
   userPrompt: string,
   maxTokens: number
-): Promise<string | null> {
+): Promise<ProviderResult> {
   const url = "https://api.anthropic.com/v1/messages";
   const res = await fetchWithTimeout(url, {
     method: "POST",
@@ -182,7 +191,9 @@ async function callClaude(
     throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
   }
   const text = data?.content?.[0]?.text;
-  return typeof text === "string" && text.trim() ? text.trim() : null;
+  const finishReason = data?.stop_reason;
+  const truncated = finishReason === "max_tokens";
+  return typeof text === "string" && text.trim() ? { text: text.trim(), truncated } : null;
 }
 
 async function callOpenAI(
@@ -190,7 +201,7 @@ async function callOpenAI(
   systemPrompt: string,
   userPrompt: string,
   maxTokens: number
-): Promise<string | null> {
+): Promise<ProviderResult> {
   const url = "https://api.openai.com/v1/chat/completions";
   const res = await fetchWithTimeout(url, {
     method: "POST",
@@ -213,7 +224,9 @@ async function callOpenAI(
     throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
   }
   const text = data?.choices?.[0]?.message?.content;
-  return typeof text === "string" && text.trim() ? text.trim() : null;
+  const finishReason = data?.choices?.[0]?.finish_reason;
+  const truncated = finishReason === "length";
+  return typeof text === "string" && text.trim() ? { text: text.trim(), truncated } : null;
 }
 
 async function callDeepSeek(
@@ -221,7 +234,7 @@ async function callDeepSeek(
   systemPrompt: string,
   userPrompt: string,
   maxTokens: number
-): Promise<string | null> {
+): Promise<ProviderResult> {
   const url = "https://api.deepseek.com/chat/completions";
   const res = await fetchWithTimeout(url, {
     method: "POST",
@@ -244,7 +257,9 @@ async function callDeepSeek(
     throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
   }
   const text = data?.choices?.[0]?.message?.content;
-  return typeof text === "string" && text.trim() ? text.trim() : null;
+  const finishReason = data?.choices?.[0]?.finish_reason;
+  const truncated = finishReason === "length";
+  return typeof text === "string" && text.trim() ? { text: text.trim(), truncated } : null;
 }
 
 async function callYandex(
@@ -252,7 +267,7 @@ async function callYandex(
   systemPrompt: string,
   userPrompt: string,
   maxTokens: number
-): Promise<string | null> {
+): Promise<ProviderResult> {
   const folderId = (await AsyncStorage.getItem(YANDEX_FOLDER_ID_KEY))?.trim();
   if (!folderId) {
     throw new Error("Не указан FolderID для YandexGPT. Заполни его в настройках.");
@@ -283,7 +298,9 @@ async function callYandex(
     throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
   }
   const text = data?.result?.alternatives?.[0]?.message?.text;
-  return typeof text === "string" && text.trim() ? text.trim() : null;
+  const finishReason = data?.result?.alternatives?.[0]?.status;
+  const truncated = finishReason === "ALTERNATIVE_STATUS_TRUNCATED_FINAL";
+  return typeof text === "string" && text.trim() ? { text: text.trim(), truncated } : null;
 }
 
 export async function summarizeContent(
@@ -291,8 +308,9 @@ export async function summarizeContent(
   provider: AiProvider,
   apiKey: string,
   depth: AiDepth,
-  modules: AiModules
-): Promise<string | null> {
+  modules: AiModules,
+  overrideMaxTokens?: number
+): Promise<SummarizeResult | "AUTH_ERROR" | null> {
   // No active modules — nothing to summarize
   const anyActive =
     modules.keyIdeas ||
@@ -309,25 +327,22 @@ export async function summarizeContent(
 
   const systemPrompt = buildSystemPrompt(depth);
   const userPrompt = buildUserPrompt(truncatedText, modules);
-  const maxTokens = getMaxTokens(depth, modules);
+  const maxTokens = overrideMaxTokens ?? getMaxTokens(depth, modules);
 
   try {
+    let raw: ProviderResult = null;
     if (provider === "gemini") {
-      return await callGemini(apiKey, systemPrompt, userPrompt, maxTokens);
+      raw = await callGemini(apiKey, systemPrompt, userPrompt, maxTokens);
+    } else if (provider === "claude") {
+      raw = await callClaude(apiKey, systemPrompt, userPrompt, maxTokens);
+    } else if (provider === "openai") {
+      raw = await callOpenAI(apiKey, systemPrompt, userPrompt, maxTokens);
+    } else if (provider === "deepseek") {
+      raw = await callDeepSeek(apiKey, systemPrompt, userPrompt, maxTokens);
+    } else if (provider === "yandex") {
+      raw = await callYandex(apiKey, systemPrompt, userPrompt, maxTokens);
     }
-    if (provider === "claude") {
-      return await callClaude(apiKey, systemPrompt, userPrompt, maxTokens);
-    }
-    if (provider === "openai") {
-      return await callOpenAI(apiKey, systemPrompt, userPrompt, maxTokens);
-    }
-    if (provider === "deepseek") {
-      return await callDeepSeek(apiKey, systemPrompt, userPrompt, maxTokens);
-    }
-    if (provider === "yandex") {
-      return await callYandex(apiKey, systemPrompt, userPrompt, maxTokens);
-    }
-    return null;
+    return raw;
   } catch (error: any) {
     const msg = typeof error?.message === "string" ? error.message : "AI request failed";
     console.error("AI error:", msg);

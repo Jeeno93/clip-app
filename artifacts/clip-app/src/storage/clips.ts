@@ -27,6 +27,7 @@ export interface Clip {
     fullText?: string;
   };
   summary?: string;
+  summaryTruncated?: boolean;
 }
 
 export interface Domain {
