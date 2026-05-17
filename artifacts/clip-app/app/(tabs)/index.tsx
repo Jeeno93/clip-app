@@ -41,7 +41,6 @@ export default function HomeScreen() {
     dailyCards,
     streak,
     loading,
-    reachedLimit,
     addClip,
     refresh,
     inboxCount,
@@ -474,12 +473,11 @@ export default function HomeScreen() {
           style={s.quickInput}
           onSubmitEditing={handleQuickAdd}
           returnKeyType="done"
-          editable={!reachedLimit}
         />
         <TouchableOpacity
-          style={[s.quickBtn, (!quickText.trim() || reachedLimit) && { opacity: 0.5 }]}
+          style={[s.quickBtn, !quickText.trim() && { opacity: 0.5 }]}
           onPress={handleQuickAdd}
-          disabled={!quickText.trim() || reachedLimit || adding}
+          disabled={!quickText.trim() || adding}
         >
           {adding ? (
             <ActivityIndicator color={colors.primaryForeground} size="small" />

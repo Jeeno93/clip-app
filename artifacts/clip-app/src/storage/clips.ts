@@ -8,7 +8,6 @@ const DAILY_DATE_KEY = "@clip:daily_date";
 const DOMAINS_KEY = "@clip:domains";
 const TAG_ENTRIES_KEY = "@clip:tag_entries";
 
-export const FREE_LIMIT = 100;
 
 export interface Clip {
   id: string;

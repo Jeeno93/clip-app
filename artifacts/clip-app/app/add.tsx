@@ -21,7 +21,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import TagPicker from "../src/components/TagPicker";
 import { useClips } from "../src/context/ClipsContext";
-import { FREE_LIMIT } from "../src/storage/clips";
 import {
   fetchLinkPreview,
   isUrl,
@@ -41,7 +40,7 @@ export default function AddClipScreen() {
     source?: string;
     imageUri?: string;
   }>();
-  const { clips, allTags, addClip, reachedLimit } = useClips();
+  const { clips, allTags, addClip } = useClips();
 
   const imageUri = params.imageUri ?? null;
   const hasImage = !!imageUri;
@@ -156,13 +155,6 @@ export default function AddClipScreen() {
 
   const handleSave = async () => {
     if (!canSave) return;
-    if (reachedLimit) {
-      Alert.alert(
-        "Лимит достигнут",
-        `Бесплатная версия поддерживает до ${FREE_LIMIT} идей.`
-      );
-      return;
-    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSaving(true);
     const trimmedTitle = title.trim();
@@ -349,22 +341,6 @@ export default function AddClipScreen() {
       fontSize: 13,
       fontFamily: "Inter_400Regular",
     },
-    limitBanner: {
-      backgroundColor: "#2D1515",
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: "#7C2B2B",
-      padding: 14,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-    },
-    limitText: {
-      color: "#F87171",
-      fontSize: 13,
-      fontFamily: "Inter_400Regular",
-      flex: 1,
-    },
   });
 
   return (
@@ -377,10 +353,10 @@ export default function AddClipScreen() {
         <TouchableOpacity
           style={[
             s.saveBtn,
-            (!canSave || reachedLimit || saving) && { opacity: 0.5 },
+            (!canSave || saving) && { opacity: 0.5 },
           ]}
           onPress={handleSave}
-          disabled={!canSave || reachedLimit || saving}
+          disabled={!canSave || saving}
         >
           {saving ? (
             <ActivityIndicator color={colors.primaryForeground} size="small" />
@@ -400,15 +376,6 @@ export default function AddClipScreen() {
         contentContainerStyle={s.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {reachedLimit && (
-          <View style={s.limitBanner}>
-            <Feather name="alert-triangle" size={16} color="#F87171" />
-            <Text style={s.limitText}>
-              Достигнут лимит бесплатной версии ({FREE_LIMIT} идей)
-            </Text>
-          </View>
-        )}
-
         {hasImage && (
           <View>
             <Text style={s.label}>Изображение</Text>
@@ -473,7 +440,6 @@ export default function AddClipScreen() {
             placeholderTextColor={colors.textMuted}
             style={s.titleInput}
             maxLength={100}
-            editable={!reachedLimit}
           />
           <View style={s.textRow}>
             <TextInput
@@ -494,12 +460,10 @@ export default function AddClipScreen() {
                 (hasImage || linkPreview) && s.textInputCompact,
               ]}
               multiline
-              editable={!reachedLimit}
             />
             {VOICE_AVAILABLE && (
               <TouchableOpacity
                 onPress={startVoiceInput}
-                disabled={reachedLimit}
                 style={s.micButton}
               >
                 <Text style={s.micIcon}>🎤</Text>

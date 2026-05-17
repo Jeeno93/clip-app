@@ -19,7 +19,8 @@
     "android": {
       "backgroundColor": "#0D0D0D",
       "softwareKeyboardLayoutMode": "pan",
-      "package": "com.jeeno93.clipapp"
+      "package": "com.jeeno93.clipapp",
+      "versionCode": 2
     },
     "web": {
       "favicon": "./assets/images/icon.png"

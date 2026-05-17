@@ -8,7 +8,6 @@ import React, {
 import {
   Clip,
   Domain,
-  FREE_LIMIT,
   Streak,
   deleteClip,
   deleteDomain,
@@ -31,7 +30,6 @@ interface ClipsContextType {
   allTags: string[];
   streak: Streak;
   loading: boolean;
-  reachedLimit: boolean;
   domains: Domain[];
   inboxCount: number;
   addClip: (
@@ -100,7 +98,6 @@ export function ClipsProvider({ children }: { children: React.ReactNode }) {
       linkPreview?: Clip["linkPreview"],
       title?: string
     ): Promise<Clip | null> => {
-      if (clips.length >= FREE_LIMIT) return null;
       const payload: Omit<Clip, "id" | "createdAt"> = {
         text,
         tags,
@@ -218,7 +215,6 @@ export function ClipsProvider({ children }: { children: React.ReactNode }) {
         allTags,
         streak,
         loading,
-        reachedLimit: clips.length >= FREE_LIMIT,
         domains,
         inboxCount,
         addClip,
