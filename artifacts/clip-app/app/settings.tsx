@@ -6,6 +6,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -247,6 +248,31 @@ export default function SettingsScreen() {
     container: {
       flex: 1,
       backgroundColor: colors.background,
+    },
+    apiInfoBlock: {
+      backgroundColor: colors.bgCard,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      padding: 16,
+      gap: 8,
+      marginBottom: 4,
+    },
+    apiInfoTitle: {
+      fontSize: 14,
+      fontFamily: "Inter_600SemiBold",
+      color: colors.accent,
+    },
+    apiInfoText: {
+      fontSize: 12,
+      fontFamily: "Inter_400Regular",
+      color: colors.textSecondary,
+      lineHeight: 18,
+    },
+    apiInfoLink: {
+      fontSize: 12,
+      fontFamily: "Inter_500Medium",
+      color: colors.accent,
     },
     header: {
       paddingTop: topPad + 12,
@@ -622,6 +648,28 @@ export default function SettingsScreen() {
           <Text style={s.sectionHint}>
             Конспекты статей с помощью твоего API ключа.
           </Text>
+
+          {!Object.values(aiKeys).some(
+            (v) => typeof v === "string" && v !== null && (v as string).trim().length > 0
+          ) && (
+            <View style={s.apiInfoBlock}>
+              <Text style={s.apiInfoTitle}>✦ Как получить API ключ</Text>
+              <Text style={s.apiInfoText}>
+                {"1. Перейди на platform.deepseek.com\n"}
+                {"2. Зарегистрируйся (2 минуты)\n"}
+                {"3. Раздел API Keys → Create Key\n"}
+                {"4. Скопируй и вставь ключ ниже"}
+              </Text>
+              <TouchableOpacity
+                onPress={() => Linking.openURL("https://platform.deepseek.com")}
+              >
+                <Text style={s.apiInfoLink}>Открыть →</Text>
+              </TouchableOpacity>
+              <Text style={[s.apiInfoText, { marginTop: 8 }]}>
+                {"Стоимость: ~0.001$ за анализ\nРекомендуем пополнить на $5"}
+              </Text>
+            </View>
+          )}
 
           {/* Provider */}
           <View style={s.providerRow}>

@@ -26,7 +26,17 @@ import CreateDomainModal from "../../src/components/CreateDomainModal";
 import DomainPickerModal from "../../src/components/DomainPickerModal";
 import TagPicker from "../../src/components/TagPicker";
 import { useClips } from "../../src/context/ClipsContext";
-import { getSettings, Settings, AiModules, AiDepth } from "../../src/storage/clips";
+import {
+  getSettings,
+  Settings,
+  AiModules,
+  AiDepth,
+  AiProvider,
+  getFreeAnalysesRemaining,
+  incrementFreeAnalyses,
+  BUILT_IN_API_KEY,
+  BUILT_IN_PROVIDER,
+} from "../../src/storage/clips";
 import { summarizeContent, getMaxTokens, SummarizeResult } from "../../src/utils/summarize";
 import { estimateCost, CostEstimate } from "../../src/utils/cost";
 
@@ -82,6 +92,7 @@ export default function ClipDetailScreen() {
   const [aiSettings, setAiSettings] = useState<Settings | null>(null);
   const [localModules, setLocalModules] = useState<AiModules | null>(null);
   const [localDepth, setLocalDepth] = useState<AiDepth | null>(null);
+  const [freeRemaining, setFreeRemaining] = useState<number | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [elapsed, setElapsed] = useState(0);
 
@@ -101,10 +112,15 @@ export default function ClipDetailScreen() {
       let active = true;
       (async () => {
         const s = await getSettings();
+        const hasOwnKey = Object.values(s.aiKeys).some(
+          (v) => typeof v === "string" && v !== null && v.trim().length > 0
+        );
+        const rem = hasOwnKey ? null : await getFreeAnalysesRemaining();
         if (active) {
           setAiSettings(s);
           setLocalModules(s.aiModules);
           setLocalDepth(s.aiDepth);
+          setFreeRemaining(rem);
         }
       })();
       return () => {
@@ -225,17 +241,17 @@ export default function ClipDetailScreen() {
   const hasAnalysisInput = buildAnalysisInput().trim().length > 0;
   const hasAnalyzableContent =
     hasAnalysisInput && (!!clip.linkPreview || clip.text.length > 200);
-  const canAnalyze =
-    !!currentApiKey &&
-    !!aiSettings?.aiProvider &&
-    hasAnalyzableContent;
-
   // True only once settings have loaded and every provider key is blank.
   const noKeyConfigured =
     aiSettings !== null &&
     !Object.values(aiSettings.aiKeys).some(
       (v) => typeof v === "string" && v.trim().length > 0
     );
+
+  const canAnalyze =
+    (!!currentApiKey || (noKeyConfigured && (freeRemaining ?? 0) > 0)) &&
+    !!aiSettings?.aiProvider &&
+    hasAnalyzableContent;
 
   // Show the onboarding CTA when there's something to analyse but no key set.
   const showOnboardingButton =
@@ -267,7 +283,29 @@ export default function ClipDetailScreen() {
   };
 
   const handleAnalyze = async (overrideMaxTokens?: number) => {
-    if (!currentApiKey || !aiSettings?.aiProvider) return;
+    if (!aiSettings?.aiProvider) return;
+
+    let apiKeyToUse: string | null = aiSettings.aiKeys[aiSettings.aiProvider] ?? null;
+    let providerToUse: AiProvider = aiSettings.aiProvider;
+    const usingBuiltIn = !apiKeyToUse;
+
+    if (!apiKeyToUse) {
+      const remaining = await getFreeAnalysesRemaining();
+      if (remaining <= 0) {
+        Alert.alert(
+          "Бесплатные анализы закончились",
+          "Ты использовал все 10 бесплатных анализов. Добавь свой API ключ в настройках чтобы продолжить — это займёт 2 минуты.",
+          [
+            { text: "Настроить ключ", onPress: () => router.push("/settings") },
+            { text: "Позже", style: "cancel" },
+          ]
+        );
+        return;
+      }
+      apiKeyToUse = BUILT_IN_API_KEY;
+      providerToUse = BUILT_IN_PROVIDER;
+    }
+
     const m = localModules ?? aiSettings.aiModules;
     const anyActive =
       m.keyIdeas || m.terms || m.aiPerspective || m.questions || m.practical;
@@ -284,8 +322,8 @@ export default function ClipDetailScreen() {
       const text = buildAnalysisInput();
       const result = await summarizeContent(
         text,
-        aiSettings.aiProvider,
-        currentApiKey,
+        providerToUse,
+        apiKeyToUse,
         localDepth ?? aiSettings.aiDepth,
         localModules ?? aiSettings.aiModules,
         overrideMaxTokens
@@ -306,6 +344,10 @@ export default function ClipDetailScreen() {
         return;
       }
       await editClipSummary(clip.id, result.text, result.truncated);
+      if (usingBuiltIn) {
+        const newRemaining = await incrementFreeAnalyses();
+        setFreeRemaining(newRemaining);
+      }
       if (result.truncated) {
         const currentMax = getMaxTokens(
           localDepth ?? aiSettings.aiDepth,
@@ -793,6 +835,11 @@ export default function ClipDetailScreen() {
       fontFamily: "Inter_400Regular",
       color: colors.textSecondary,
     },
+    freeCounterText: {
+      fontSize: 11,
+      fontFamily: "Inter_400Regular",
+      color: colors.textMuted,
+    },
     deleteBtn: {
       flexDirection: "row",
       alignItems: "center",
@@ -1168,6 +1215,24 @@ export default function ClipDetailScreen() {
                 </View>
               );
             })()}
+
+            {noKeyConfigured && freeRemaining !== null && (
+              freeRemaining > 3 ? (
+                <Text style={s.freeCounterText}>
+                  {"✦ "}{freeRemaining} бесплатных анализов
+                </Text>
+              ) : freeRemaining > 0 ? (
+                <Text style={[s.freeCounterText, { color: colors.accent }]}>
+                  {"⚠ Осталось "}{freeRemaining} {freeRemaining === 1 ? "бесплатный анализ" : "бесплатных анализа"}
+                </Text>
+              ) : (
+                <TouchableOpacity onPress={() => router.push("/settings")}>
+                  <Text style={[s.freeCounterText, { color: colors.accentDim }]}>
+                    Бесплатные анализы закончились · Настроить ключ →
+                  </Text>
+                </TouchableOpacity>
+              )
+            )}
 
             {costEstimate !== null && (
               <Text style={s.costEstimateText}>

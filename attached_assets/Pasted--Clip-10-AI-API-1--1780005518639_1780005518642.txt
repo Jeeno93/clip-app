@@ -1,0 +1,142 @@
+Добавь в Clip 10 бесплатных AI анализов для 
+пользователей без своего API ключа.
+
+ШАГ 1 — Встроенный ключ и счётчик в storage
+
+В src/storage/clips.ts добавь:
+
+// Встроенный ключ DeepSeek для бесплатных анализов
+// Вынести в отдельную константу чтобы легко менять
+const BUILT_IN_API_KEY = "ВСТАВЬ_СЮДА_СВОЙ_КЛЮЧ_DEEPSEEK"
+const BUILT_IN_PROVIDER = "deepseek"
+const FREE_ANALYSES_LIMIT = 10
+const FREE_ANALYSES_KEY = "@clip:free_analyses_used"
+
+export async function getFreeAnalysesUsed(): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(FREE_ANALYSES_KEY)
+    return raw ? parseInt(raw) : 0
+  } catch {
+    return 0
+  }
+}
+
+export async function incrementFreeAnalyses(): Promise<number> {
+  const used = await getFreeAnalysesUsed()
+  const newUsed = used + 1
+  await AsyncStorage.setItem(FREE_ANALYSES_KEY, String(newUsed))
+  return newUsed
+}
+
+export async function getFreeAnalysesRemaining(): Promise<number> {
+  const used = await getFreeAnalysesUsed()
+  return Math.max(0, FREE_ANALYSES_LIMIT - used)
+}
+
+export { BUILT_IN_API_KEY, BUILT_IN_PROVIDER, FREE_ANALYSES_LIMIT }
+
+ШАГ 2 — Логика выбора ключа в handleAnalyze
+
+В app/clip/[id].tsx обнови логику перед вызовом 
+summarizeContent:
+
+// Определяем какой ключ использовать
+let apiKeyToUse = aiSettings.aiKeys[aiSettings.aiProvider]
+let providerToUse = aiSettings.aiProvider
+
+if (!apiKeyToUse) {
+  // Нет своего ключа — проверяем бесплатный лимит
+  const remaining = await getFreeAnalysesRemaining()
+  
+  if (remaining <= 0) {
+    // Лимит исчерпан
+    Alert.alert(
+      'Бесплатные анализы закончились',
+      'Ты использовал все 10 бесплатных анализов. ' +
+      'Добавь свой API ключ в настройках чтобы ' +
+      'продолжить — это займёт 2 минуты.',
+      [
+        { 
+          text: 'Настроить ключ', 
+          onPress: () => router.push('/settings')
+        },
+        { text: 'Позже', style: 'cancel' }
+      ]
+    )
+    return
+  }
+  
+  // Используем встроенный ключ
+  apiKeyToUse = BUILT_IN_API_KEY
+  providerToUse = BUILT_IN_PROVIDER
+}
+
+// После успешного анализа если использовался 
+// встроенный ключ — увеличить счётчик:
+if (!aiSettings.aiKeys[aiSettings.aiProvider]) {
+  const remaining = await incrementFreeAnalyses()
+  // Если осталось мало — показать предупреждение
+  if (remaining <= 3 && remaining > 0) {
+    // Небольшой toast или текст под результатом:
+    // "Осталось N бесплатных анализов"
+    setFreeAnalysesRemaining(remaining)
+  }
+}
+
+ШАГ 3 — Счётчик в UI
+
+Добавь стейт:
+const [freeRemaining, setFreeRemaining] = useState<number | null>(null)
+
+В useFocusEffect загружать:
+if (!aiSettings.aiKeys[aiSettings.aiProvider]) {
+  getFreeAnalysesRemaining().then(setFreeRemaining)
+}
+
+Показывать под блоком галочек ТОЛЬКО если 
+нет своего ключа:
+
+Если freeRemaining > 3:
+  "✦ {freeRemaining} бесплатных анализов"
+  цвет: textMuted, fontSize xs
+
+Если freeRemaining <= 3 и > 0:
+  "⚠ Осталось {freeRemaining} бесплатных анализа"
+  цвет: accent, fontSize xs
+
+Если freeRemaining === 0:
+  "Бесплатные анализы закончились · Настроить ключ →"
+  цвет: accentDim, fontSize xs, 
+  нажатие → router.push('/settings')
+
+ШАГ 4 — Мануал в настройках
+
+В app/settings.tsx в разделе AI перед блоком 
+выбора провайдера добавь информационный блок 
+который показывается ТОЛЬКО если нет ни одного 
+сохранённого ключа:
+
+┌─────────────────────────────────────┐
+│ ✦ Как получить API ключ            │
+│                                     │
+│ 1. Перейди на platform.deepseek.com │
+│    [Открыть →]                      │
+│ 2. Зарегистрируйся (2 минуты)      │
+│ 3. Раздел API Keys → Create Key    │
+│ 4. Скопируй и вставь ключ ниже     │
+│                                     │
+│ Стоимость: ~0.001$ за анализ       │
+│ Рекомендуем пополнить на $5        │
+└─────────────────────────────────────┘
+
+Стиль: фон bgCard, граница border, 
+borderRadius md, padding md,
+заголовок: accent fontSize sm fontWeight semibold,
+текст: textSecondary fontSize xs,
+ссылка "Открыть →": accent, 
+нажатие → Linking.openURL('https://platform.deepseek.com')
+
+После того как пользователь сохранил ключ — 
+блок скрывается автоматически.
+
+Больше ничего не меняй.

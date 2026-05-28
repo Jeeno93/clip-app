@@ -8,6 +8,33 @@ const DAILY_DATE_KEY = "@clip:daily_date";
 const DOMAINS_KEY = "@clip:domains";
 const TAG_ENTRIES_KEY = "@clip:tag_entries";
 
+const BUILT_IN_API_KEY = "sk-c4d5d2069a6443699acaa4ade2a8e9dc";
+const BUILT_IN_PROVIDER = "deepseek" as const;
+const FREE_ANALYSES_LIMIT = 10;
+const FREE_ANALYSES_KEY = "@clip:free_analyses_used";
+
+export async function getFreeAnalysesUsed(): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(FREE_ANALYSES_KEY);
+    return raw ? parseInt(raw, 10) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export async function incrementFreeAnalyses(): Promise<number> {
+  const used = await getFreeAnalysesUsed();
+  const newUsed = used + 1;
+  await AsyncStorage.setItem(FREE_ANALYSES_KEY, String(newUsed));
+  return newUsed;
+}
+
+export async function getFreeAnalysesRemaining(): Promise<number> {
+  const used = await getFreeAnalysesUsed();
+  return Math.max(0, FREE_ANALYSES_LIMIT - used);
+}
+
+export { BUILT_IN_API_KEY, BUILT_IN_PROVIDER, FREE_ANALYSES_LIMIT };
 
 export interface Clip {
   id: string;
