@@ -18,7 +18,8 @@
     },
     "android": {
       "backgroundColor": "#0D0D0D",
-      "softwareKeyboardLayoutMode": "pan"
+      "softwareKeyboardLayoutMode": "pan",
+      "versionCode": 3
     },
     "web": {
       "favicon": "./assets/images/icon.png"

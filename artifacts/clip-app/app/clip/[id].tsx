@@ -298,6 +298,13 @@ export default function ClipDetailScreen() {
         Alert.alert("Ошибка", "Не удалось получить ответ. Попробуй позже.");
         return;
       }
+      if (result.timedOut) {
+        Alert.alert(
+          "Время ожидания истекло",
+          "Материал слишком большой для текущих настроек. Попробуй уменьшить глубину или количество модулей."
+        );
+        return;
+      }
       await editClipSummary(clip.id, result.text, result.truncated);
       if (result.truncated) {
         const currentMax = getMaxTokens(

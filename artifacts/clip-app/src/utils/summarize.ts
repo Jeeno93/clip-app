@@ -2,8 +2,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import type { AiDepth, AiModules, AiProvider } from "../storage/clips";
 
-const TIMEOUT_MS = 30000;
 const YANDEX_FOLDER_ID_KEY = "@clip:yandex_folder_id";
+
+function getTimeoutMs(textLength: number, depth: AiDepth): number {
+  const base =
+    depth === "deep" ? 60000 : depth === "standard" ? 45000 : 30000;
+  const extra = Math.max(0, Math.floor((textLength - 10000) / 5000)) * 10000;
+  return Math.min(base + extra, 120000);
+}
 
 // Per-provider character limits for the analysis input. Values picked to stay
 // well under each provider's context window with room for the system prompt
@@ -119,10 +125,11 @@ function buildUserPrompt(text: string, modules: AiModules): string {
 
 async function fetchWithTimeout(
   url: string,
-  init: RequestInit
+  init: RequestInit,
+  timeoutMs: number
 ): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, { ...init, signal: controller.signal });
   } finally {
@@ -133,6 +140,7 @@ async function fetchWithTimeout(
 export interface SummarizeResult {
   text: string;
   truncated: boolean;
+  timedOut: boolean;
 }
 
 type ProviderResult = SummarizeResult | "AUTH_ERROR" | null;
@@ -141,7 +149,8 @@ async function callGemini(
   apiKey: string,
   systemPrompt: string,
   userPrompt: string,
-  maxTokens: number
+  maxTokens: number,
+  timeoutMs: number
 ): Promise<ProviderResult> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
   const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
@@ -152,7 +161,7 @@ async function callGemini(
       contents: [{ parts: [{ text: fullPrompt }] }],
       generationConfig: { maxOutputTokens: maxTokens },
     }),
-  });
+  }, timeoutMs);
   if (res.status === 401 || res.status === 403) return "AUTH_ERROR";
   const data = await res.json().catch((e) => ({ _parseError: e.message }));
   if (!res.ok) {
@@ -161,14 +170,15 @@ async function callGemini(
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   const finishReason = data?.candidates?.[0]?.finishReason;
   const truncated = finishReason === "MAX_TOKENS";
-  return typeof text === "string" && text.trim() ? { text: text.trim(), truncated } : null;
+  return typeof text === "string" && text.trim() ? { text: text.trim(), truncated, timedOut: false } : null;
 }
 
 async function callClaude(
   apiKey: string,
   systemPrompt: string,
   userPrompt: string,
-  maxTokens: number
+  maxTokens: number,
+  timeoutMs: number
 ): Promise<ProviderResult> {
   const url = "https://api.anthropic.com/v1/messages";
   const res = await fetchWithTimeout(url, {
@@ -184,7 +194,7 @@ async function callClaude(
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
     }),
-  });
+  }, timeoutMs);
   if (res.status === 401 || res.status === 403) return "AUTH_ERROR";
   const data = await res.json().catch((e) => ({ _parseError: e.message }));
   if (!res.ok) {
@@ -193,14 +203,15 @@ async function callClaude(
   const text = data?.content?.[0]?.text;
   const finishReason = data?.stop_reason;
   const truncated = finishReason === "max_tokens";
-  return typeof text === "string" && text.trim() ? { text: text.trim(), truncated } : null;
+  return typeof text === "string" && text.trim() ? { text: text.trim(), truncated, timedOut: false } : null;
 }
 
 async function callOpenAI(
   apiKey: string,
   systemPrompt: string,
   userPrompt: string,
-  maxTokens: number
+  maxTokens: number,
+  timeoutMs: number
 ): Promise<ProviderResult> {
   const url = "https://api.openai.com/v1/chat/completions";
   const res = await fetchWithTimeout(url, {
@@ -217,7 +228,7 @@ async function callOpenAI(
         { role: "user", content: userPrompt },
       ],
     }),
-  });
+  }, timeoutMs);
   if (res.status === 401 || res.status === 403) return "AUTH_ERROR";
   const data = await res.json().catch((e) => ({ _parseError: e.message }));
   if (!res.ok) {
@@ -226,14 +237,15 @@ async function callOpenAI(
   const text = data?.choices?.[0]?.message?.content;
   const finishReason = data?.choices?.[0]?.finish_reason;
   const truncated = finishReason === "length";
-  return typeof text === "string" && text.trim() ? { text: text.trim(), truncated } : null;
+  return typeof text === "string" && text.trim() ? { text: text.trim(), truncated, timedOut: false } : null;
 }
 
 async function callDeepSeek(
   apiKey: string,
   systemPrompt: string,
   userPrompt: string,
-  maxTokens: number
+  maxTokens: number,
+  timeoutMs: number
 ): Promise<ProviderResult> {
   const url = "https://api.deepseek.com/chat/completions";
   const res = await fetchWithTimeout(url, {
@@ -250,7 +262,7 @@ async function callDeepSeek(
         { role: "user", content: userPrompt },
       ],
     }),
-  });
+  }, timeoutMs);
   if (res.status === 401 || res.status === 403) return "AUTH_ERROR";
   const data = await res.json().catch((e) => ({ _parseError: e.message }));
   if (!res.ok) {
@@ -259,14 +271,15 @@ async function callDeepSeek(
   const text = data?.choices?.[0]?.message?.content;
   const finishReason = data?.choices?.[0]?.finish_reason;
   const truncated = finishReason === "length";
-  return typeof text === "string" && text.trim() ? { text: text.trim(), truncated } : null;
+  return typeof text === "string" && text.trim() ? { text: text.trim(), truncated, timedOut: false } : null;
 }
 
 async function callYandex(
   apiKey: string,
   systemPrompt: string,
   userPrompt: string,
-  maxTokens: number
+  maxTokens: number,
+  timeoutMs: number
 ): Promise<ProviderResult> {
   const folderId = (await AsyncStorage.getItem(YANDEX_FOLDER_ID_KEY))?.trim();
   if (!folderId) {
@@ -291,7 +304,7 @@ async function callYandex(
         { role: "user", text: userPrompt },
       ],
     }),
-  });
+  }, timeoutMs);
   if (res.status === 401 || res.status === 403) return "AUTH_ERROR";
   const data = await res.json().catch((e) => ({ _parseError: e.message }));
   if (!res.ok) {
@@ -300,7 +313,7 @@ async function callYandex(
   const text = data?.result?.alternatives?.[0]?.message?.text;
   const finishReason = data?.result?.alternatives?.[0]?.status;
   const truncated = finishReason === "ALTERNATIVE_STATUS_TRUNCATED_FINAL";
-  return typeof text === "string" && text.trim() ? { text: text.trim(), truncated } : null;
+  return typeof text === "string" && text.trim() ? { text: text.trim(), truncated, timedOut: false } : null;
 }
 
 export async function summarizeContent(
@@ -328,22 +341,26 @@ export async function summarizeContent(
   const systemPrompt = buildSystemPrompt(depth);
   const userPrompt = buildUserPrompt(truncatedText, modules);
   const maxTokens = overrideMaxTokens ?? getMaxTokens(depth, modules);
+  const timeoutMs = getTimeoutMs(text.length, depth);
 
   try {
     let raw: ProviderResult = null;
     if (provider === "gemini") {
-      raw = await callGemini(apiKey, systemPrompt, userPrompt, maxTokens);
+      raw = await callGemini(apiKey, systemPrompt, userPrompt, maxTokens, timeoutMs);
     } else if (provider === "claude") {
-      raw = await callClaude(apiKey, systemPrompt, userPrompt, maxTokens);
+      raw = await callClaude(apiKey, systemPrompt, userPrompt, maxTokens, timeoutMs);
     } else if (provider === "openai") {
-      raw = await callOpenAI(apiKey, systemPrompt, userPrompt, maxTokens);
+      raw = await callOpenAI(apiKey, systemPrompt, userPrompt, maxTokens, timeoutMs);
     } else if (provider === "deepseek") {
-      raw = await callDeepSeek(apiKey, systemPrompt, userPrompt, maxTokens);
+      raw = await callDeepSeek(apiKey, systemPrompt, userPrompt, maxTokens, timeoutMs);
     } else if (provider === "yandex") {
-      raw = await callYandex(apiKey, systemPrompt, userPrompt, maxTokens);
+      raw = await callYandex(apiKey, systemPrompt, userPrompt, maxTokens, timeoutMs);
     }
     return raw;
   } catch (error: any) {
+    if (error?.name === "AbortError") {
+      return { text: "", truncated: false, timedOut: true };
+    }
     const msg = typeof error?.message === "string" ? error.message : "AI request failed";
     console.error("AI error:", msg);
     throw new Error(msg);
