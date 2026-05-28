@@ -606,6 +606,59 @@ export async function getTagUsageCounts(): Promise<Record<string, number>> {
   return counts;
 }
 
+export async function addDemoClips(): Promise<void> {
+  const existing = await getAllClips();
+  const hasDemo = existing.some((c) => c.tags.includes("demo"));
+  if (hasDemo) return;
+
+  const demoClips: Omit<Clip, "id" | "createdAt">[] = [
+    {
+      title: "Как работает Share Intent",
+      text: "Выдели любой текст в Telegram, браузере или читалке → нажми «Поделиться» → выбери Clip. Идея сохранена за 3 секунды.",
+      source: "manual",
+      tags: ["demo"],
+      imageUri: null,
+      contentTypeId: "tutorial",
+    },
+    {
+      title: "Ось зла: аномалия в реликтовом излучении",
+      text: "Крупнейшие структуры реликтового излучения выровнены вдоль единой оси совпадающей с плоскостью орбиты Земли. Вероятность случайности — менее 0.1%. Это бросает вызов космологическому принципу изотропности Вселенной.",
+      source: "manual",
+      tags: ["demo", "наука"],
+      imageUri: null,
+      contentTypeId: "research",
+    },
+    {
+      title: "Дейкстра о скромности программиста",
+      text: "Программист должен осознавать ограниченность своего мозга. Избегай хитроумных трюков — пиши код который ты сам сможешь прочитать через месяц. Сложность — главный враг надёжности.",
+      source: "manual",
+      tags: ["demo", "программирование"],
+      imageUri: null,
+      contentTypeId: "book",
+    },
+    {
+      title: "Животные практикуют самолечение",
+      text: "Овцы способны целенаправленно выбирать растения с танинами при заражении гельминтами и прекращать есть их когда выздоравливают. Это доказанный ассоциативный рефлекс, а не случайность.",
+      source: "manual",
+      tags: ["demo", "биология"],
+      imageUri: null,
+      contentTypeId: "research",
+    },
+    {
+      title: "Идея для голосовой заметки",
+      text: "Нажми на микрофон в поле ввода и надиктуй мысль — Clip транскрибирует и сохранит. Удобно когда едешь в машине или не хочется печатать.",
+      source: "voice",
+      tags: ["demo"],
+      imageUri: null,
+      contentTypeId: "tutorial",
+    },
+  ];
+
+  for (const demo of demoClips) {
+    await saveClip(demo);
+  }
+}
+
 // ───────────────────────────────────────────────────────────────
 
 let saveQueue: Promise<void> = Promise.resolve();

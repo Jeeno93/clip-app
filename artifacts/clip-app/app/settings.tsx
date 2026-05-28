@@ -31,6 +31,8 @@ import {
   AiKeys,
   AiModules,
   AiProvider,
+  addDemoClips,
+  getAllClips,
   getSettings,
   saveSettings,
   ThemeMode,
@@ -647,6 +649,34 @@ export default function SettingsScreen() {
               </Text>
             </View>
             <Text style={{ fontSize: 16, color: colors.textMuted }}>→</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={s.exportBtn}
+            onPress={async () => {
+              const clips = await getAllClips();
+              const hasDemo = clips.some((c) => c.tags.includes("demo"));
+              if (hasDemo) {
+                Alert.alert(
+                  "Уже добавлены",
+                  "Демо-карточки уже добавлены. Найди их по тегу #demo в архиве."
+                );
+              } else {
+                await addDemoClips();
+                Alert.alert(
+                  "Готово",
+                  "Добавлено 5 демо-карточек. Найди их по тегу #demo в архиве."
+                );
+              }
+            }}
+          >
+            <Text style={{ fontSize: 16 }}>✦</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.exportBtnText}>Добавить демо-карточки</Text>
+              <Text style={s.exportBtnSub}>
+                Посмотри как работает Clip на примерах
+              </Text>
+            </View>
           </TouchableOpacity>
 
           <View style={s.warningBox}>

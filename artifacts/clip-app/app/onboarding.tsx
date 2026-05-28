@@ -3,14 +3,11 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
-  Animated,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -18,43 +15,30 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
 import { requestNotificationPermission, scheduleDailyDigest } from "../src/notifications/digest";
-import { saveClip, saveSettings } from "../src/storage/clips";
+import { addDemoClips, saveSettings } from "../src/storage/clips";
 
 export default function OnboardingScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
-  const [firstQuote, setFirstQuote] = useState("");
-  const [saving, setSaving] = useState(false);
 
   const steps = [
-    "Первая идея",
+    "Приветствие",
     "Как добавлять",
+    "AI-анализ",
     "Уведомления",
   ];
 
-  const handleStep1Continue = async () => {
-    if (firstQuote.trim()) {
-      setSaving(true);
-      try {
-        await saveClip({
-          text: firstQuote.trim(),
-          tags: [],
-          source: "manual",
-          imageUri: null,
-        });
-      } catch {}
-      setSaving(false);
-    }
+  const handleStep0Continue = () => {
     setStep(1);
   };
 
-  const handleStep1Skip = () => {
-    setStep(1);
+  const handleStep1Continue = () => {
+    setStep(2);
   };
 
   const handleStep2Continue = () => {
-    setStep(2);
+    setStep(3);
   };
 
   const handleNotifChoice = async (hour: number | null) => {
@@ -66,6 +50,7 @@ export default function OnboardingScreen() {
       }
     }
     await saveSettings({ notificationHour: hour, onboardingDone: true });
+    await addDemoClips();
     router.replace("/(tabs)");
   };
 
@@ -204,6 +189,27 @@ export default function OnboardingScreen() {
       fontFamily: "Inter_400Regular",
       marginTop: 2,
     },
+    benefitList: {
+      gap: 16,
+      marginBottom: 36,
+    },
+    benefitRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    benefitIcon: {
+      fontSize: 18,
+      color: colors.accent,
+      width: 24,
+      textAlign: "center",
+    },
+    benefitText: {
+      fontSize: 15,
+      fontFamily: "Inter_400Regular",
+      color: colors.foreground,
+      flex: 1,
+    },
   });
 
   return (
@@ -235,39 +241,23 @@ export default function OnboardingScreen() {
           {step === 0 && (
             <>
               <Text style={s.headline}>
-                Ты читаешь много. Помнишь мало. Clip это исправит.
+                {"Ты читаешь много.\nПомнишь мало."}
               </Text>
-              <Text style={s.subtitle}>
-                Начни с первой идеи — той, которую хочется перечитывать.
-              </Text>
-              <TextInput
-                value={firstQuote}
-                onChangeText={setFirstQuote}
-                placeholder="Введи идею или мысль..."
-                placeholderTextColor={colors.textMuted}
-                style={s.input}
-                multiline
-                autoFocus
-              />
-              <TouchableOpacity
-                style={[
-                  s.btnPrimary,
-                  !firstQuote.trim() && { opacity: 0.6 },
-                ]}
-                onPress={handleStep1Continue}
-                disabled={saving}
-              >
-                {saving ? (
-                  <ActivityIndicator color={colors.primaryForeground} />
-                ) : (
-                  <Text style={s.btnPrimaryText}>Сохранить и продолжить</Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={s.btnSecondary}
-                onPress={handleStep1Skip}
-              >
-                <Text style={s.btnSecondaryText}>Позже</Text>
+              <Text style={s.subtitle}>Clip это исправит.</Text>
+              <View style={s.benefitList}>
+                {[
+                  { icon: "↗", text: "Сохраняй из любого приложения за 3 сек" },
+                  { icon: "✦", text: "Получай лучшее каждое утро" },
+                  { icon: "🤖", text: "AI делает конспект любой статьи" },
+                ].map((b) => (
+                  <View key={b.icon} style={s.benefitRow}>
+                    <Text style={s.benefitIcon}>{b.icon}</Text>
+                    <Text style={s.benefitText}>{b.text}</Text>
+                  </View>
+                ))}
+              </View>
+              <TouchableOpacity style={s.btnPrimary} onPress={handleStep0Continue}>
+                <Text style={s.btnPrimaryText}>Начать</Text>
               </TouchableOpacity>
             </>
           )}
@@ -275,7 +265,7 @@ export default function OnboardingScreen() {
           {step === 1 && (
             <>
               <Text style={s.headline}>
-                Добавляй из{"\n"}любого приложения
+                {"Добавляй из\nлюбого приложения"}
               </Text>
               <Text style={s.subtitle}>
                 Увидел важную мысль — поделись с Clip. Три секунды, и она в архиве навсегда.
@@ -303,7 +293,7 @@ export default function OnboardingScreen() {
               </View>
               <TouchableOpacity
                 style={s.btnPrimary}
-                onPress={handleStep2Continue}
+                onPress={handleStep1Continue}
               >
                 <Text style={s.btnPrimaryText}>Понял, продолжить</Text>
               </TouchableOpacity>
@@ -311,6 +301,35 @@ export default function OnboardingScreen() {
           )}
 
           {step === 2 && (
+            <>
+              <Text style={s.headline}>AI анализирует статьи за тебя</Text>
+              <Text style={s.subtitle}>
+                {"У тебя есть 10 бесплатных анализов.\nПотом можно добавить свой API ключ — это займёт 2 минуты и стоит копейки."}
+              </Text>
+              <View style={s.illustrationBox}>
+                {[
+                  "Открой любую сохранённую карточку",
+                  "Нажми «Анализировать»",
+                  "Получи конспект с ключевыми идеями",
+                ].map((text, i) => (
+                  <View key={i} style={s.illustrationStep}>
+                    <View style={s.illustrationStepNum}>
+                      <Text style={s.illustrationStepNumText}>{i + 1}</Text>
+                    </View>
+                    <Text style={s.illustrationStepText}>{text}</Text>
+                    {i < 2 && (
+                      <Feather name="arrow-down" size={14} color={colors.textMuted} />
+                    )}
+                  </View>
+                ))}
+              </View>
+              <TouchableOpacity style={s.btnPrimary} onPress={handleStep2Continue}>
+                <Text style={s.btnPrimaryText}>Отлично!</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {step === 3 && (
             <>
               <Text style={s.headline}>
                 Когда присылать лучшее из того что ты читал?
