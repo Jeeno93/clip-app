@@ -1,0 +1,123 @@
+Добавь мультиселект карточек и массовые операции 
+в архив Clip.
+
+ШАГ 1 — Режим выбора в ArchiveScreen
+
+В app/(tabs)/archive.tsx добавь:
+
+Стейт:
+const [selectionMode, setSelectionMode] = useState(false)
+const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+Вход в режим выбора:
+- Long press на любую карточку → selectionMode = true, 
+  карточка добавляется в selectedIds
+
+Выход из режима выбора:
+- Кнопка "Отмена" в шапке → selectionMode = false, 
+  selectedIds очищается
+
+ШАГ 2 — UI в режиме выбора
+
+Когда selectionMode === true:
+
+Шапка меняется:
+БЫЛО: заголовок "Твоя база знаний" + гамбургер
+СТАЛО: 
+  Слева: "Отмена" (textSecondary)
+  Центр: "Выбрано: N" (textPrimary, fontWeight semibold)
+  Справа: "Выбрать все" (accent)
+
+Каждая карточка ClipCard получает проп:
+  selected?: boolean
+  selectionMode?: boolean
+
+Если selectionMode:
+  - Слева от карточки показывать круглый чекбокс:
+    Выбран: круг с янтарной заливкой + ✓ белым
+    Не выбран: круг с border colors.border
+  - Тап на карточку = toggle в selectedIds
+    (не открывает детальный просмотр)
+
+ШАГ 3 — Панель действий
+
+Когда selectedIds.size > 0 — показывать 
+фиксированную панель снизу над tab bar:
+
+┌─────────────────────────────────────────┐
+│ [📁 В домен]  [# Теги]  [🗑 Удалить]  │
+└─────────────────────────────────────────┘
+
+Фон: bgCard, borderTop: 1px border,
+padding: spacing.md
+Кнопки равномерно распределены (space-around)
+Текст кнопок: fontSize xs, под иконкой эмодзи
+
+ШАГ 4 — Действие "В домен"
+
+При нажатии — показать DomainPickerModal 
+(уже существует в проекте).
+
+После выбора домена:
+for (const id of selectedIds) {
+  await moveClipToDomain(id, selectedDomainId)
+}
+setSelectionMode(false)
+setSelectedIds(new Set())
+await loadClips() // обновить список
+
+Показать краткое подтверждение:
+Alert.alert('Готово', `${selectedIds.size} идей перемещено`)
+
+ШАГ 5 — Действие "Теги"
+
+При нажатии — показать Modal снизу с TagPicker:
+
+Modal содержит:
+- Заголовок "Добавить теги к выбранным идеям"
+- TagPicker (существующий компонент)
+  selectedTags: [] (начинаем с пустого)
+  existingTags: все теги из архива
+- Кнопка "Добавить" янтарная
+
+При нажатии "Добавить":
+for (const id of selectedIds) {
+  const clip = clips.find(c => c.id === id)
+  if (clip) {
+    const newTags = [...new Set([...clip.tags, ...selectedTags])]
+    await updateClip(id, { tags: newTags })
+  }
+}
+setSelectionMode(false)
+setSelectedIds(new Set())
+await loadClips()
+
+Alert.alert('Готово', `Теги добавлены к ${selectedIds.size} идеям`)
+
+ШАГ 6 — Действие "Удалить"
+
+Alert с подтверждением:
+"Удалить ${selectedIds.size} идей? Это действие 
+нельзя отменить."
+[ 'Удалить', 'Отмена' ]
+
+При подтверждении:
+for (const id of selectedIds) {
+  await deleteClip(id)
+}
+setSelectionMode(false)
+setSelectedIds(new Set())
+await loadClips()
+
+ШАГ 7 — Обновить ClipCard
+
+В src/components/ClipCard.tsx добавь пропсы:
+  selectionMode?: boolean
+  selected?: boolean
+
+Если selectionMode:
+  - Добавить слева View с чекбоксом (диаметр 24px)
+  - onPress передаётся как есть (родитель управляет)
+  - onLongPress отключить в режиме выбора
+
+Больше ничего не меняй.

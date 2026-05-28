@@ -36,6 +36,8 @@ interface ClipCardProps {
   onPress?: () => void;
   onLongPress?: () => void;
   compact?: boolean;
+  selectionMode?: boolean;
+  selected?: boolean;
 }
 
 export default function ClipCard({
@@ -43,22 +45,41 @@ export default function ClipCard({
   onPress,
   onLongPress,
   compact = false,
+  selectionMode = false,
+  selected = false,
 }: ClipCardProps) {
   const colors = useColors();
 
   return (
     <TouchableOpacity
       onPress={onPress}
-      onLongPress={onLongPress}
+      onLongPress={selectionMode ? undefined : onLongPress}
       activeOpacity={0.8}
       style={[
         styles.card,
         {
           backgroundColor: colors.card,
-          borderColor: colors.border,
+          borderColor: selectionMode && selected ? colors.accent : colors.border,
         },
       ]}
     >
+      {selectionMode && (
+        <View style={styles.checkboxWrap}>
+          <View
+            style={[
+              styles.checkbox,
+              {
+                borderColor: selected ? colors.accent : colors.border,
+                backgroundColor: selected ? colors.accent : "transparent",
+              },
+            ]}
+          >
+            {selected && (
+              <Text style={styles.checkmark}>✓</Text>
+            )}
+          </View>
+        </View>
+      )}
       <View
         style={[styles.accentBar, { backgroundColor: colors.primary }]}
       />
@@ -265,5 +286,25 @@ const styles = StyleSheet.create({
   aiBadgeText: {
     fontSize: 11,
     fontFamily: "Inter_500Medium",
+  },
+  checkboxWrap: {
+    justifyContent: "center",
+    alignItems: "center",
+    paddingLeft: 10,
+    paddingRight: 4,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkmark: {
+    color: "#fff",
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: "Inter_600SemiBold",
   },
 });

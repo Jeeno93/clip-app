@@ -5,6 +5,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
+  KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -18,19 +20,29 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import ClipCard from "../../src/components/ClipCard";
 import CreateDomainModal from "../../src/components/CreateDomainModal";
+import DomainPickerModal from "../../src/components/DomainPickerModal";
 import Sidebar, { ActiveDomain } from "../../src/components/Sidebar";
+import TagPicker from "../../src/components/TagPicker";
 import { useClips } from "../../src/context/ClipsContext";
+import { deleteClip, updateClip } from "../../src/storage/clips";
 import { clipsCount } from "../../src/utils/pluralize";
 
 export default function ArchiveScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { clips, allTags, removeClip, domains } = useClips();
+  const { clips, allTags, removeClip, domains, refresh } = useClips();
   const [search, setSearch] = useState("");
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeDomainId, setActiveDomainId] = useState<ActiveDomain>("all");
   const [createDomainOpen, setCreateDomainOpen] = useState(false);
+
+  // Selection mode
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDomainPickerOpen, setBulkDomainPickerOpen] = useState(false);
+  const [bulkTagModalOpen, setBulkTagModalOpen] = useState(false);
+  const [bulkSelectedTags, setBulkSelectedTags] = useState<string[]>([]);
 
   // Honour deeplink ?domain=inbox|all|<id> from Home etc.
   // We only consume the param ONCE per distinct value — otherwise re-focusing
@@ -109,6 +121,83 @@ export default function ArchiveScreen() {
           text: "Удалить",
           style: "destructive",
           onPress: () => removeClip(id),
+        },
+      ]
+    );
+  };
+
+  const enterSelection = (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSelectionMode(true);
+    setSelectedIds(new Set([id]));
+  };
+
+  const cancelSelection = () => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const toggleSelected = (id: string) => {
+    Haptics.selectionAsync();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    Haptics.selectionAsync();
+    setSelectedIds(new Set(filtered.map((c) => c.id)));
+  };
+
+  const handleBulkMove = async (domainId: string | null) => {
+    const count = selectedIds.size;
+    for (const id of selectedIds) {
+      await updateClip(id, { domainId: domainId ?? undefined });
+    }
+    await refresh();
+    setBulkDomainPickerOpen(false);
+    cancelSelection();
+    Alert.alert("Готово", `${count} идей перемещено`);
+  };
+
+  const handleBulkTag = async () => {
+    if (bulkSelectedTags.length === 0) return;
+    const count = selectedIds.size;
+    for (const id of selectedIds) {
+      const clip = clips.find((c) => c.id === id);
+      if (clip) {
+        const newTags = [...new Set([...clip.tags, ...bulkSelectedTags])];
+        await updateClip(id, { tags: newTags });
+      }
+    }
+    await refresh();
+    setBulkTagModalOpen(false);
+    setBulkSelectedTags([]);
+    cancelSelection();
+    Alert.alert("Готово", `Теги добавлены к ${count} идеям`);
+  };
+
+  const handleBulkDelete = () => {
+    const count = selectedIds.size;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    Alert.alert(
+      "Удалить идеи?",
+      `Удалить ${count} идей? Это действие нельзя отменить.`,
+      [
+        { text: "Отмена", style: "cancel" },
+        {
+          text: "Удалить",
+          style: "destructive",
+          onPress: async () => {
+            for (const id of selectedIds) {
+              await deleteClip(id);
+            }
+            await refresh();
+            cancelSelection();
+          },
         },
       ]
     );
@@ -205,12 +294,116 @@ export default function ArchiveScreen() {
       color: colors.textSecondary,
       textAlign: "center",
     },
+    selectionHeader: {
+      paddingTop: topPad + 16,
+      paddingHorizontal: 20,
+      paddingBottom: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    selectionCancel: {
+      fontSize: 15,
+      fontFamily: "Inter_400Regular",
+      color: colors.textSecondary,
+      paddingVertical: 4,
+    },
+    selectionCount: {
+      fontSize: 16,
+      fontFamily: "Inter_600SemiBold",
+      color: colors.foreground,
+    },
+    selectionAll: {
+      fontSize: 15,
+      fontFamily: "Inter_400Regular",
+      color: colors.accent,
+      paddingVertical: 4,
+    },
+    actionBar: {
+      backgroundColor: colors.bgCard,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      flexDirection: "row",
+      justifyContent: "space-around",
+      paddingVertical: 12,
+      paddingBottom: (Platform.OS === "web" ? 12 : insets.bottom) + 12,
+    },
+    actionBtn: {
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 16,
+    },
+    actionBtnEmoji: {
+      fontSize: 22,
+    },
+    actionBtnText: {
+      fontSize: 11,
+      fontFamily: "Inter_400Regular",
+      color: colors.foreground,
+    },
+    tagModalBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.6)",
+      justifyContent: "flex-end",
+    },
+    tagModalSheet: {
+      backgroundColor: colors.bgCard,
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      paddingTop: 18,
+      paddingHorizontal: 20,
+      paddingBottom: (Platform.OS === "web" ? 24 : insets.bottom) + 18,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      maxHeight: "70%",
+    },
+    tagModalHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 16,
+    },
+    tagModalTitle: {
+      fontSize: 16,
+      fontFamily: "Inter_600SemiBold",
+      color: colors.foreground,
+    },
+    tagModalCancel: {
+      fontSize: 14,
+      fontFamily: "Inter_400Regular",
+      color: colors.textSecondary,
+    },
+    addTagsBtn: {
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: "center",
+      marginTop: 16,
+    },
+    addTagsBtnText: {
+      color: colors.primaryForeground,
+      fontSize: 15,
+      fontFamily: "Inter_600SemiBold",
+    },
   });
 
   const tags = ["Все", ...allTags];
 
   return (
     <View style={s.container}>
+      {selectionMode ? (
+        <View style={s.selectionHeader}>
+          <TouchableOpacity onPress={cancelSelection}>
+            <Text style={s.selectionCancel}>Отмена</Text>
+          </TouchableOpacity>
+          <Text style={s.selectionCount}>Выбрано: {selectedIds.size}</Text>
+          <TouchableOpacity onPress={selectAll}>
+            <Text style={s.selectionAll}>Выбрать все</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
       <View style={s.header}>
         <View style={s.titleRow}>
           <TouchableOpacity
@@ -320,6 +513,7 @@ export default function ArchiveScreen() {
           </>
         )}
       </View>
+      )}
 
       {filtered.length === 0 ? (
         <View style={s.emptyContainer}>
@@ -337,16 +531,47 @@ export default function ArchiveScreen() {
           renderItem={({ item }) => (
             <ClipCard
               clip={item}
-              onPress={() =>
-                router.push({ pathname: "/clip/[id]", params: { id: item.id } })
-              }
-              onLongPress={() => handleDelete(item.id)}
+              onPress={() => {
+                if (selectionMode) {
+                  toggleSelected(item.id);
+                } else {
+                  router.push({ pathname: "/clip/[id]", params: { id: item.id } });
+                }
+              }}
+              onLongPress={() => {
+                if (!selectionMode) enterSelection(item.id);
+              }}
+              selectionMode={selectionMode}
+              selected={selectedIds.has(item.id)}
               compact
             />
           )}
-          contentContainerStyle={s.listContent}
+          contentContainerStyle={[
+            s.listContent,
+            selectionMode && selectedIds.size > 0 && { paddingBottom: 100 },
+          ]}
           showsVerticalScrollIndicator={false}
         />
+      )}
+
+      {selectionMode && selectedIds.size > 0 && (
+        <View style={s.actionBar}>
+          <TouchableOpacity style={s.actionBtn} onPress={() => setBulkDomainPickerOpen(true)}>
+            <Text style={s.actionBtnEmoji}>📁</Text>
+            <Text style={s.actionBtnText}>В домен</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.actionBtn} onPress={() => {
+            setBulkSelectedTags([]);
+            setBulkTagModalOpen(true);
+          }}>
+            <Text style={s.actionBtnEmoji}>#</Text>
+            <Text style={s.actionBtnText}>Теги</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.actionBtn} onPress={handleBulkDelete}>
+            <Text style={s.actionBtnEmoji}>🗑</Text>
+            <Text style={s.actionBtnText}>Удалить</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       <Sidebar
@@ -368,6 +593,53 @@ export default function ArchiveScreen() {
         onClose={() => setCreateDomainOpen(false)}
         onCreated={(d) => setActiveDomainId(d.id)}
       />
+
+      <DomainPickerModal
+        visible={bulkDomainPickerOpen}
+        onClose={() => setBulkDomainPickerOpen(false)}
+        currentDomainId={undefined}
+        onSelect={handleBulkMove}
+        onCreateNew={() => {
+          setBulkDomainPickerOpen(false);
+          setCreateDomainOpen(true);
+        }}
+      />
+
+      <Modal
+        visible={bulkTagModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setBulkTagModalOpen(false)}
+      >
+        <KeyboardAvoidingView
+          style={s.tagModalBackdrop}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <TouchableOpacity style={{ flex: 1 }} onPress={() => setBulkTagModalOpen(false)} activeOpacity={1} />
+          <View style={s.tagModalSheet}>
+            <View style={s.tagModalHeader}>
+              <Text style={s.tagModalTitle}>Добавить теги к выбранным идеям</Text>
+              <TouchableOpacity onPress={() => setBulkTagModalOpen(false)}>
+                <Text style={s.tagModalCancel}>Отмена</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <TagPicker
+                selected={bulkSelectedTags}
+                existingTags={allTags}
+                onChange={setBulkSelectedTags}
+              />
+            </ScrollView>
+            <TouchableOpacity
+              style={[s.addTagsBtn, bulkSelectedTags.length === 0 && { opacity: 0.5 }]}
+              onPress={handleBulkTag}
+              disabled={bulkSelectedTags.length === 0}
+            >
+              <Text style={s.addTagsBtnText}>Добавить</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
