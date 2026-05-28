@@ -38,7 +38,8 @@ interface ClipsContextType {
     source: string,
     imageUri?: string | null,
     linkPreview?: Clip["linkPreview"],
-    title?: string
+    title?: string,
+    contentTypeId?: string
   ) => Promise<Clip | null>;
   removeClip: (id: string) => Promise<void>;
   editClipTags: (id: string, tags: string[]) => Promise<void>;
@@ -96,7 +97,8 @@ export function ClipsProvider({ children }: { children: React.ReactNode }) {
       source: string,
       imageUri: string | null = null,
       linkPreview?: Clip["linkPreview"],
-      title?: string
+      title?: string,
+      contentTypeId?: string
     ): Promise<Clip | null> => {
       const payload: Omit<Clip, "id" | "createdAt"> = {
         text,
@@ -106,6 +108,7 @@ export function ClipsProvider({ children }: { children: React.ReactNode }) {
       };
       if (linkPreview) payload.linkPreview = linkPreview;
       if (title && title.length > 0) payload.title = title;
+      if (contentTypeId) payload.contentTypeId = contentTypeId;
       const clip = await saveClip(payload);
       await loadAll();
       return clip;

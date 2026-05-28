@@ -626,6 +626,68 @@ interface Streak {
 
 - **Главный экран** (`app/(tabs)/index.tsx`) — под streak'ом, если `inboxCount > 0`, отдельной строкой: `📥 N неразобранных` (textMuted, число — `accent`). Тап делает `router.push({ pathname: "/(tabs)/archive", params: { domain: "inbox" } })`.
 
+---
+
+## Типы контента
+
+Справочник типов контента адаптирует системный промпт AI-анализа под тип материала.
+
+### Структура (`ContentType`, `src/storage/clips.ts`)
+
+```ts
+interface ContentType {
+  id: string;
+  name: string;
+  icon: string;       // эмодзи
+  isBuiltIn: boolean; // встроенные нельзя удалить
+  promptHint: string; // скрытая подсказка для AI
+}
+```
+
+### Встроенные типы
+
+| Иконка | Название | Описание подсказки |
+|--------|----------|--------------------|
+| 🔬 | Исследование | Акцент на неочевидных выводах и противоречиях |
+| 📖 | Туториал | Конкретные шаги, практическое применение |
+| 📰 | Новость | Ключевые факты + инсайты в перспективе |
+| 📚 | Книга | Контекст главы, концепции автора, связи идей |
+| 💬 | Пост / Мнение | Тезис автора, аргументы, контраргументы |
+| 📄 | Другое | Анализ по содержанию |
+
+### Хранилище
+
+- Встроенные типы захардкожены в `BUILT_IN_CONTENT_TYPES` (не хранятся в AsyncStorage).
+- Пользовательские хранятся в `@clip:content_types` (массив JSON).
+- `getAllContentTypes()` возвращает встроенные + пользовательские (встроенные первыми).
+- `saveCustomContentType(Omit<ContentType, "isBuiltIn">)` — добавляет новый.
+- `deleteCustomContentType(id)` — удаляет только пользовательские.
+
+### Как работает адаптация промпта (`src/utils/summarize.ts`)
+
+`summarizeContent` принимает необязательный параметр `contentTypeHint?: string` (7-й аргумент).  
+`buildSystemPrompt(depth, contentTypeHint?)` добавляет в системный промпт:  
+`Тип материала: <promptHint>` — если hint передан.
+
+В `app/clip/[id].tsx` перед запуском анализа:
+```ts
+const contentType = allContentTypes.find(t => t.id === clip?.contentTypeId);
+const contentTypeHint = contentType?.promptHint;
+```
+`allContentTypes` загружается в `useFocusEffect` вместе с настройками AI.
+
+### Экраны и компоненты
+
+- **`app/add.tsx`** — секция «Тип контента» между текстовым полем и тегами: горизонтальный `ScrollView` с чипами (иконка + название, активный чип: `accentSubtle` фон, `accent` граница). Последний чип — «+ Свой тип», открывает `CreateContentTypeModal`. При сохранении `contentTypeId` передаётся в `addClip`.
+
+- **`src/components/CreateContentTypeModal.tsx`** — bottom-sheet `Modal animationType="slide"`. Выбор иконки из `DOMAIN_EMOJIS` (те же 60 эмодзи что у доменов), `TextInput` названия (`maxLength: 30`), кнопка «Создать».
+
+- **`app/content-types.tsx`** — справочник типов. Список всех типов: встроенные с меткой «встроенный» (серый текст), пользовательские с кнопкой 🗑️. Кнопка удаления показывает `Alert` с подтверждением. Кнопка «+ Добавить свой тип» в низу экрана.
+
+- **`app/settings.tsx`** — кнопка «Типы контента →» добавлена перед «Справочник тегов» в разделе данных.
+
+- **`ClipsContext.tsx`** — `addClip` принимает 8-й аргумент `contentTypeId?: string`, записывает его в payload если передан.
+
 **Инструменты:**
 - TypeScript `~5.9.2`, `tsc --noEmit` для проверки типов
 - `babel-plugin-react-compiler` (React Compiler включён через `experiments.reactCompiler`)

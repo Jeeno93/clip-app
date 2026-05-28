@@ -36,6 +36,8 @@ import {
   incrementFreeAnalyses,
   BUILT_IN_API_KEY,
   BUILT_IN_PROVIDER,
+  getAllContentTypes,
+  ContentType,
 } from "../../src/storage/clips";
 import { summarizeContent, getMaxTokens, SummarizeResult } from "../../src/utils/summarize";
 import { estimateCost, CostEstimate } from "../../src/utils/cost";
@@ -95,6 +97,7 @@ export default function ClipDetailScreen() {
   const [freeRemaining, setFreeRemaining] = useState<number | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [allContentTypes, setAllContentTypes] = useState<ContentType[]>([]);
 
   useEffect(() => {
     if (!analyzing) {
@@ -111,7 +114,7 @@ export default function ClipDetailScreen() {
     useCallback(() => {
       let active = true;
       (async () => {
-        const s = await getSettings();
+        const [s, cts] = await Promise.all([getSettings(), getAllContentTypes()]);
         const hasOwnKey = Object.values(s.aiKeys).some(
           (v) => typeof v === "string" && v !== null && v.trim().length > 0
         );
@@ -121,6 +124,7 @@ export default function ClipDetailScreen() {
           setLocalModules(s.aiModules);
           setLocalDepth(s.aiDepth);
           setFreeRemaining(rem);
+          setAllContentTypes(cts);
         }
       })();
       return () => {
@@ -330,13 +334,16 @@ export default function ClipDetailScreen() {
     setAnalyzing(true);
     try {
       const text = buildAnalysisInput();
+      const contentType = allContentTypes.find((t) => t.id === clip?.contentTypeId);
+      const contentTypeHint = contentType?.promptHint;
       const result = await summarizeContent(
         text,
         providerToUse,
         apiKeyToUse,
         localDepth ?? aiSettings.aiDepth,
         localModules ?? aiSettings.aiModules,
-        overrideMaxTokens
+        overrideMaxTokens,
+        contentTypeHint
       );
       if (result === "AUTH_ERROR") {
         Alert.alert("Ошибка", "Неверный API ключ. Проверь настройки.");

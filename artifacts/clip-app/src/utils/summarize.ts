@@ -88,8 +88,9 @@ function depthInstruction(depth: AiDepth): string {
   }
 }
 
-function buildSystemPrompt(depth: AiDepth): string {
-  return `Ты помогаешь пользователю извлекать знания из статей и постов. Отвечай на русском языке. ${depthInstruction(depth)}`;
+function buildSystemPrompt(depth: AiDepth, contentTypeHint?: string): string {
+  const typeHint = contentTypeHint ? ` Тип материала: ${contentTypeHint}` : "";
+  return `Ты помогаешь пользователю извлекать знания из статей и постов. Отвечай на русском языке. ${depthInstruction(depth)}${typeHint}`;
 }
 
 function buildUserPrompt(text: string, modules: AiModules): string {
@@ -322,7 +323,8 @@ export async function summarizeContent(
   apiKey: string,
   depth: AiDepth,
   modules: AiModules,
-  overrideMaxTokens?: number
+  overrideMaxTokens?: number,
+  contentTypeHint?: string
 ): Promise<SummarizeResult | "AUTH_ERROR" | null> {
   // No active modules — nothing to summarize
   const anyActive =
@@ -338,7 +340,7 @@ export async function summarizeContent(
   const providerLimit = PROVIDER_LIMITS[provider] ?? SOFT_LIMIT;
   const truncatedText = smartTruncate(text, providerLimit);
 
-  const systemPrompt = buildSystemPrompt(depth);
+  const systemPrompt = buildSystemPrompt(depth, contentTypeHint);
   const userPrompt = buildUserPrompt(truncatedText, modules);
   const maxTokens = overrideMaxTokens ?? getMaxTokens(depth, modules);
   const timeoutMs = getTimeoutMs(text.length, depth);

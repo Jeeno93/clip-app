@@ -623,6 +623,20 @@ export default function SettingsScreen() {
 
           <TouchableOpacity
             style={s.exportBtn}
+            onPress={() => router.push("/content-types")}
+          >
+            <Text style={{ fontSize: 16 }}>📄</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.exportBtnText}>Типы контента</Text>
+              <Text style={s.exportBtnSub}>
+                Адаптация AI-анализа под тип материала
+              </Text>
+            </View>
+            <Text style={{ fontSize: 16, color: colors.textMuted }}>→</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={s.exportBtn}
             onPress={() => router.push("/tags")}
           >
             <Text style={{ fontSize: 16 }}>#</Text>

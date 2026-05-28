@@ -1,0 +1,145 @@
+Добавь в Clip справочник типов контента который 
+адаптирует AI анализ под выбранный тип.
+
+ШАГ 1 — Структура типа контента в storage
+
+В src/storage/clips.ts добавь:
+
+interface ContentType {
+  id: string           // уникальный идентификатор
+  name: string         // название типа
+  icon: string         // эмодзи
+  isBuiltIn: boolean   // встроенный (нельзя удалить)
+  promptHint: string   // подсказка для AI (скрыта от пользователя)
+}
+
+const BUILT_IN_CONTENT_TYPES: ContentType[] = [
+  {
+    id: 'research',
+    name: 'Исследование',
+    icon: '🔬',
+    isBuiltIn: true,
+    promptHint: 'Это научное исследование или аналитический материал. Акцентируй внимание на том что неочевидно, какие выводы противоречат общепринятому мнению и почему это важно.'
+  },
+  {
+    id: 'tutorial',
+    name: 'Туториал',
+    icon: '📖',
+    isBuiltIn: true,
+    promptHint: 'Это инструкция или туториал. Выдели конкретные шаги и практическое применение. Не нужно объяснять почему это неочевидно — лучше объясни как применить.'
+  },
+  {
+    id: 'news',
+    name: 'Новость',
+    icon: '📰',
+    isBuiltIn: true,
+    promptHint: 'Это новость или репортаж о событии. Выдели ключевые факты и важные вытекающие инсайты — что это означает в перспективе.'
+  },
+  {
+    id: 'book',
+    name: 'Книга',
+    icon: '📚',
+    isBuiltIn: true,
+    promptHint: 'Это фрагмент книги. Сохраняй контекст главы, выделяй ключевые концепции автора и связи с другими идеями в тексте.'
+  },
+  {
+    id: 'post',
+    name: 'Пост / Мнение',
+    icon: '💬',
+    isBuiltIn: true,
+    promptHint: 'Это авторский пост или колонка с личным мнением. Выдели главный тезис автора, аргументы и возможные контраргументы.'
+  },
+  {
+    id: 'other',
+    name: 'Другое',
+    icon: '📄',
+    isBuiltIn: true,
+    promptHint: 'Проанализируй материал исходя из его содержания.'
+  },
+]
+
+const CONTENT_TYPES_KEY = "@clip:content_types"
+
+Функции:
+async function getAllContentTypes(): Promise<ContentType[]>
+  // Возвращает встроенные + пользовательские из AsyncStorage
+  // Встроенные всегда идут первыми
+
+async function saveCustomContentType(type: Omit<ContentType, 'isBuiltIn'>): Promise<void>
+  // Сохраняет пользовательский тип (isBuiltIn: false)
+
+async function deleteCustomContentType(id: string): Promise<void>
+  // Удаляет только если isBuiltIn === false
+
+export { ContentType, BUILT_IN_CONTENT_TYPES }
+
+ШАГ 2 — Поле contentTypeId в Clip
+
+В структуру Clip добавь:
+  contentTypeId?: string  // null = не выбран
+
+ШАГ 3 — Выбор типа в AddClipScreen
+
+В app/add.tsx добавь секцию "ТИП КОНТЕНТА" 
+между полем текста и тегами:
+
+Горизонтальный скролл чипов (как было у источника):
+[🔬 Исследование] [📖 Туториал] [📰 Новость] 
+[📚 Книга] [💬 Пост] [📄 Другое] [+ Свой тип]
+
+Активный чип: accentSubtle фон, accent граница
+Неактивный: bgTag фон, border граница
+
+При сохранении — записывать contentTypeId в карточку.
+
+Кнопка "+ Свой тип" открывает модал создания 
+нового типа (см. ШАГ 5).
+
+ШАГ 4 — Адаптация промпта в summarize.ts
+
+В src/utils/summarize.ts добавь параметр:
+contentTypeHint?: string
+
+В системный промпт добавить если передан:
+`Тип материала: ${contentTypeHint}`
+
+В app/clip/[id].tsx перед вызовом summarizeContent:
+const contentType = allContentTypes.find(
+  t => t.id === clip.contentTypeId
+)
+const contentTypeHint = contentType?.promptHint
+
+Передавать contentTypeHint в summarizeContent.
+
+ШАГ 5 — Модал создания своего типа
+(src/components/CreateContentTypeModal.tsx)
+
+Modal снизу.
+- Выбор иконки (те же эмодзи что у доменов)
+- TextInput названия типа (maxLength: 30)
+- Кнопка "Создать" → saveCustomContentType()
+- Кнопка "Отмена"
+
+ШАГ 6 — Экран справочника типов контента
+(app/content-types.tsx)
+
+Список всех типов: встроенные + пользовательские.
+
+Встроенные:
+- Иконка + название
+- Серая пометка "встроенный"
+- Нельзя удалить
+
+Пользовательские:
+- Иконка + название
+- Кнопка удаления (корзина) справа
+- Свайп влево для удаления
+
+Кнопка "+ Добавить свой тип" внизу.
+
+Вход в справочник: в app/settings.tsx 
+добавь кнопку "Типы контента →" 
+в раздел рядом со справочником тегов.
+
+Больше ничего не меняй.
+После выполнения обнови CLIP_DOCUMENTATION.md.

@@ -54,6 +54,7 @@ export interface Clip {
   };
   summary?: string;
   summaryTruncated?: boolean;
+  contentTypeId?: string;
 }
 
 export interface Domain {
@@ -61,6 +62,92 @@ export interface Domain {
   name: string;
   icon: string; // emoji
   createdAt: string;
+}
+
+export interface ContentType {
+  id: string;
+  name: string;
+  icon: string;
+  isBuiltIn: boolean;
+  promptHint: string;
+}
+
+export const BUILT_IN_CONTENT_TYPES: ContentType[] = [
+  {
+    id: "research",
+    name: "Исследование",
+    icon: "🔬",
+    isBuiltIn: true,
+    promptHint:
+      "Это научное исследование или аналитический материал. Акцентируй внимание на том что неочевидно, какие выводы противоречат общепринятому мнению и почему это важно.",
+  },
+  {
+    id: "tutorial",
+    name: "Туториал",
+    icon: "📖",
+    isBuiltIn: true,
+    promptHint:
+      "Это инструкция или туториал. Выдели конкретные шаги и практическое применение. Не нужно объяснять почему это неочевидно — лучше объясни как применить.",
+  },
+  {
+    id: "news",
+    name: "Новость",
+    icon: "📰",
+    isBuiltIn: true,
+    promptHint:
+      "Это новость или репортаж о событии. Выдели ключевые факты и важные вытекающие инсайты — что это означает в перспективе.",
+  },
+  {
+    id: "book",
+    name: "Книга",
+    icon: "📚",
+    isBuiltIn: true,
+    promptHint:
+      "Это фрагмент книги. Сохраняй контекст главы, выделяй ключевые концепции автора и связи с другими идеями в тексте.",
+  },
+  {
+    id: "post",
+    name: "Пост / Мнение",
+    icon: "💬",
+    isBuiltIn: true,
+    promptHint:
+      "Это авторский пост или колонка с личным мнением. Выдели главный тезис автора, аргументы и возможные контраргументы.",
+  },
+  {
+    id: "other",
+    name: "Другое",
+    icon: "📄",
+    isBuiltIn: true,
+    promptHint: "Проанализируй материал исходя из его содержания.",
+  },
+];
+
+const CONTENT_TYPES_KEY = "@clip:content_types";
+
+export async function getAllContentTypes(): Promise<ContentType[]> {
+  try {
+    const raw = await AsyncStorage.getItem(CONTENT_TYPES_KEY);
+    const custom: ContentType[] = raw ? JSON.parse(raw) : [];
+    return [...BUILT_IN_CONTENT_TYPES, ...custom];
+  } catch {
+    return [...BUILT_IN_CONTENT_TYPES];
+  }
+}
+
+export async function saveCustomContentType(
+  type: Omit<ContentType, "isBuiltIn">
+): Promise<void> {
+  const raw = await AsyncStorage.getItem(CONTENT_TYPES_KEY);
+  const custom: ContentType[] = raw ? JSON.parse(raw) : [];
+  custom.push({ ...type, isBuiltIn: false });
+  await AsyncStorage.setItem(CONTENT_TYPES_KEY, JSON.stringify(custom));
+}
+
+export async function deleteCustomContentType(id: string): Promise<void> {
+  const raw = await AsyncStorage.getItem(CONTENT_TYPES_KEY);
+  const custom: ContentType[] = raw ? JSON.parse(raw) : [];
+  const filtered = custom.filter((t) => t.id !== id);
+  await AsyncStorage.setItem(CONTENT_TYPES_KEY, JSON.stringify(filtered));
 }
 
 export interface TagEntry {

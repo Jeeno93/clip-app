@@ -19,8 +19,14 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
+import CreateContentTypeModal from "../src/components/CreateContentTypeModal";
 import TagPicker from "../src/components/TagPicker";
 import { useClips } from "../src/context/ClipsContext";
+import {
+  ContentType,
+  getAllContentTypes,
+  BUILT_IN_CONTENT_TYPES,
+} from "../src/storage/clips";
 import {
   fetchLinkPreview,
   isUrl,
@@ -59,6 +65,9 @@ export default function AddClipScreen() {
   const [title, setTitle] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [contentTypeId, setContentTypeId] = useState<string | null>(null);
+  const [allContentTypes, setAllContentTypes] = useState<ContentType[]>(BUILT_IN_CONTENT_TYPES);
+  const [createContentTypeVisible, setCreateContentTypeVisible] = useState(false);
 
   const [linkPreview, setLinkPreview] = useState<LinkPreview | null>(null);
   const [linkUrl, setLinkUrl] = useState<string | null>(null);
@@ -144,6 +153,10 @@ export default function AddClipScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, hasImage]);
 
+  useEffect(() => {
+    getAllContentTypes().then(setAllContentTypes);
+  }, []);
+
   const source = hasImage
     ? "screenshot"
     : linkPreview
@@ -174,7 +187,8 @@ export default function AddClipScreen() {
       source,
       imageUri,
       linkPreview ?? undefined,
-      trimmedTitle.length > 0 ? trimmedTitle : undefined
+      trimmedTitle.length > 0 ? trimmedTitle : undefined,
+      contentTypeId ?? undefined
     );
     setSaving(false);
     if (clip) {
@@ -351,6 +365,28 @@ export default function AddClipScreen() {
       fontSize: 13,
       fontFamily: "Inter_400Regular",
     },
+    chipRow: {
+      flexDirection: "row",
+      gap: 8,
+      paddingBottom: 2,
+    },
+    chip: {
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.bgInput,
+    },
+    chipActive: {
+      borderColor: colors.accent,
+      backgroundColor: colors.accentSubtle,
+    },
+    chipText: {
+      fontSize: 13,
+      fontFamily: "Inter_400Regular",
+      color: colors.foreground,
+    },
   });
 
   return (
@@ -482,6 +518,36 @@ export default function AddClipScreen() {
           </View>
         </View>
 
+        <View>
+          <Text style={s.label}>Тип контента</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.chipRow}
+          >
+            {allContentTypes.map((ct) => {
+              const active = contentTypeId === ct.id;
+              return (
+                <TouchableOpacity
+                  key={ct.id}
+                  style={[s.chip, active && s.chipActive]}
+                  onPress={() => setContentTypeId(active ? null : ct.id)}
+                >
+                  <Text style={s.chipText}>
+                    {ct.icon} {ct.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              style={s.chip}
+              onPress={() => setCreateContentTypeVisible(true)}
+            >
+              <Text style={s.chipText}>+ Свой тип</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+
         {source !== "manual" && (
           <View>
             <Text style={s.label}>Источник</Text>
@@ -503,6 +569,16 @@ export default function AddClipScreen() {
         </View>
       </ScrollView>
       </KeyboardAvoidingView>
+
+      <CreateContentTypeModal
+        visible={createContentTypeVisible}
+        onClose={() => setCreateContentTypeVisible(false)}
+        onCreated={(ct) => {
+          setAllContentTypes((prev) => [...prev, ct]);
+          setContentTypeId(ct.id);
+          setCreateContentTypeVisible(false);
+        }}
+      />
     </View>
   );
 }
