@@ -508,6 +508,17 @@ export async function ensureTagEntries(tags: string[]): Promise<void> {
   }
 }
 
+export async function getTagUsageCounts(): Promise<Record<string, number>> {
+  const clips = await getAllClips();
+  const counts: Record<string, number> = {};
+  for (const clip of clips) {
+    for (const tag of clip.tags) {
+      counts[tag] = (counts[tag] ?? 0) + 1;
+    }
+  }
+  return counts;
+}
+
 // ───────────────────────────────────────────────────────────────
 
 let saveQueue: Promise<void> = Promise.resolve();

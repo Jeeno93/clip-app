@@ -232,6 +232,16 @@ export default function ClipDetailScreen() {
   const descLen = clip.linkPreview?.description?.length ?? 0;
   const hasFullText = fullTextLen > 500;
 
+  const tagUsageCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const c of clips) {
+      for (const tag of c.tags) {
+        counts[tag] = (counts[tag] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [clips]);
+
   const currentApiKey = aiSettings?.aiProvider
     ? aiSettings.aiKeys[aiSettings.aiProvider]
     : null;
@@ -1075,6 +1085,7 @@ export default function ClipDetailScreen() {
                 selected={editedTags}
                 existingTags={allTags}
                 onChange={setEditedTags}
+                tagUsageCounts={tagUsageCounts}
               />
               <TouchableOpacity
                 style={s.saveTagsBtn}

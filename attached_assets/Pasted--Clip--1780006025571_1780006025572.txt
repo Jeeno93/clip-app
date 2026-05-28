@@ -1,0 +1,75 @@
+Улучши интерфейс выбора тегов в Clip.
+
+КОНТЕКСТ:
+Сейчас теги отображаются горизонтальным скроллом.
+При большом количестве тегов (50+) это неудобно.
+
+НОВАЯ ЛОГИКА в src/components/TagPicker.tsx:
+
+ШАГ 1 — Сортировка тегов по популярности
+
+Компонент TagPicker получает existingTags как раньше.
+Добавь проп tagUsageCounts?: Record<string, number>
+(сколько карточек имеет каждый тег).
+
+Если tagUsageCounts передан — сортировать теги 
+по убыванию count. Если нет — оставить как есть.
+
+ШАГ 2 — Пагинация тегов
+
+Добавь стейт: const [showCount, setShowCount] = useState(10)
+
+Отображать теги порциями:
+- Первые 10 тегов сразу (самые популярные)
+- Кнопка "Ещё 20 →" если тегов больше showCount
+  При нажатии: setShowCount(prev => prev + 20)
+- Кнопка "Скрыть ↑" если showCount > 10
+  При нажатии: setShowCount(10)
+
+ШАГ 3 — Поиск по тегам
+
+Над списком тегов добавь TextInput:
+  placeholder: "Поиск тегов..."
+  value: tagSearch
+  onChangeText: setTagSearch
+
+Если tagSearch не пустой — показывать ВСЕ теги 
+отфильтрованные по поиску (игнорировать пагинацию).
+Если пустой — показывать с пагинацией.
+
+ШАГ 4 — Layout
+
+Заменить горизонтальный ScrollView на:
+- TextInput поиска сверху
+- Теги через flexWrap: 'wrap', flexDirection: 'row', 
+  gap spacing.xs — они переносятся на следующую строку
+- Под тегами кнопка "Ещё 20 →" или "Скрыть ↑"
+- Под кнопкой поле ввода нового тега (как сейчас)
+
+Стиль кнопок пагинации:
+  fontSize xs, color accent, 
+  paddingVertical spacing.xs,
+  alignSelf: 'flex-start'
+
+ШАГ 5 — Передавать tagUsageCounts
+
+В app/add.tsx и app/clip/[id].tsx где используется 
+TagPicker — вычислять tagUsageCounts:
+
+const tagUsageCounts = useMemo(() => {
+  const counts: Record<string, number> = {}
+  getAllClips().then(clips => {
+    clips.forEach(clip => {
+      clip.tags.forEach(tag => {
+        counts[tag] = (counts[tag] || 0) + 1
+      })
+    })
+  })
+  return counts
+}, [])
+
+Или проще — добавить функцию getTagUsageCounts() 
+в src/storage/clips.ts которая возвращает 
+Record<string, number>.
+
+Больше ничего не меняй.

@@ -42,6 +42,16 @@ export default function AddClipScreen() {
   }>();
   const { clips, allTags, addClip } = useClips();
 
+  const tagUsageCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const clip of clips) {
+      for (const tag of clip.tags) {
+        counts[tag] = (counts[tag] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [clips]);
+
   const imageUri = params.imageUri ?? null;
   const hasImage = !!imageUri;
 
@@ -488,6 +498,7 @@ export default function AddClipScreen() {
             selected={tags}
             existingTags={allTags}
             onChange={setTags}
+            tagUsageCounts={tagUsageCounts}
           />
         </View>
       </ScrollView>
