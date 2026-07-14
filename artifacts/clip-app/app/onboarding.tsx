@@ -1,3 +1,4 @@
+import * as amplitude from "@amplitude/analytics-react-native";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
@@ -51,6 +52,7 @@ export default function OnboardingScreen() {
     }
     await saveSettings({ notificationHour: hour, onboardingDone: true });
     await addDemoClips();
+    amplitude.track("onboarding_completed", { notificationHour: hour });
     router.replace("/(tabs)");
   };
 

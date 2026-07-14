@@ -1,3 +1,4 @@
+import * as amplitude from "@amplitude/analytics-react-native";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
@@ -333,11 +334,12 @@ export default function ClipDetailScreen() {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setAnalyzing(true);
+    const depth = localDepth ?? aiSettings.aiDepth;
+    amplitude.track("analyze_started", { usingFreeProxy, depth });
     try {
       const text = buildAnalysisInput();
       const contentType = allContentTypes.find((t) => t.id === clip?.contentTypeId);
       const contentTypeHint = contentType?.promptHint;
-      const depth = localDepth ?? aiSettings.aiDepth;
       const modules = localModules ?? aiSettings.aiModules;
 
       const result = usingFreeProxy
@@ -359,10 +361,12 @@ export default function ClipDetailScreen() {
           );
 
       if (result === "AUTH_ERROR") {
+        amplitude.track("analyze_failed", { reason: "auth_error", usingFreeProxy });
         Alert.alert("Ошибка", "Неверный API ключ. Проверь настройки.");
         return;
       }
       if (result === "QUOTA_EXCEEDED") {
+        amplitude.track("analyze_quota_exceeded");
         setFreeRemaining(0);
         Alert.alert(
           "Бесплатный лимит на сегодня исчерпан",
@@ -371,6 +375,7 @@ export default function ClipDetailScreen() {
         return;
       }
       if (result === "NOT_CONFIGURED") {
+        amplitude.track("analyze_failed", { reason: "proxy_not_configured", usingFreeProxy });
         Alert.alert(
           "Бесплатный анализ пока недоступен",
           "Добавь свой API ключ в настройках, чтобы пользоваться анализом уже сейчас."
@@ -378,16 +383,19 @@ export default function ClipDetailScreen() {
         return;
       }
       if (!result) {
+        amplitude.track("analyze_failed", { reason: "empty_response", usingFreeProxy });
         Alert.alert("Ошибка", "Не удалось получить ответ. Попробуй позже.");
         return;
       }
       if (result.timedOut) {
+        amplitude.track("analyze_failed", { reason: "timed_out", usingFreeProxy });
         Alert.alert(
           "Время ожидания истекло",
           "Материал слишком большой для текущих настроек. Попробуй уменьшить глубину или количество модулей."
         );
         return;
       }
+      amplitude.track("analyze_completed", { usingFreeProxy, depth, truncated: result.truncated });
       await editClipSummary(clip.id, result.text, result.truncated);
       if (usingFreeProxy) {
         const rem = (result as { remaining?: number }).remaining;
@@ -409,6 +417,7 @@ export default function ClipDetailScreen() {
         );
       }
     } catch (error: any) {
+      amplitude.track("analyze_failed", { reason: "exception", usingFreeProxy });
       Alert.alert("Ошибка AI", error?.message || "Неизвестная ошибка");
     } finally {
       setAnalyzing(false);

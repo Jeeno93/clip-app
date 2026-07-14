@@ -55,6 +55,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
+    "@amplitude/analytics-react-native": "^1.5.57",
     "date-fns": "^3.6.0",
     "expo-adi-registration": "^1.0.0",
     "expo-file-system": "~19.0.22",

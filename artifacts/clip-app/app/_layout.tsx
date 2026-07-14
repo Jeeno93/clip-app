@@ -1,3 +1,4 @@
+import * as amplitude from "@amplitude/analytics-react-native";
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -6,6 +7,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { router, Stack } from "expo-router";
+import * as Notifications from "expo-notifications";
 import * as SplashScreen from "expo-splash-screen";
 import { ShareIntentProvider, useShareIntentContext } from "expo-share-intent";
 import React, { useEffect, useRef } from "react";
@@ -20,6 +22,8 @@ import { ThemeProvider } from "../src/context/ThemeContext";
 import { getSettings } from "../src/storage/clips";
 
 SplashScreen.preventAutoHideAsync();
+
+amplitude.init(process.env.EXPO_PUBLIC_AMPLITUDE_API_KEY ?? "");
 
 async function checkOnboarding() {
   try {
@@ -77,6 +81,16 @@ function ShareIntentHandler() {
 function RootLayoutNav() {
   useEffect(() => {
     checkOnboarding();
+  }, []);
+
+  // Distinguishes "returned because of the daily digest push" from organic
+  // opens — conflating the two was a real diagnostic dead-end in Den, where
+  // it hid that notifications were bringing people back but not converting.
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener(() => {
+      amplitude.track("app_opened_from_push");
+    });
+    return () => sub.remove();
   }, []);
 
   return (
