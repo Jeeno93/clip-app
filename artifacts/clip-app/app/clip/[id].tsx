@@ -32,10 +32,6 @@ import {
   AiModules,
   AiDepth,
   AiProvider,
-  getFreeAnalysesRemaining,
-  incrementFreeAnalyses,
-  BUILT_IN_API_KEY,
-  BUILT_IN_PROVIDER,
   getAllContentTypes,
   ContentType,
 } from "../../src/storage/clips";
@@ -94,7 +90,6 @@ export default function ClipDetailScreen() {
   const [aiSettings, setAiSettings] = useState<Settings | null>(null);
   const [localModules, setLocalModules] = useState<AiModules | null>(null);
   const [localDepth, setLocalDepth] = useState<AiDepth | null>(null);
-  const [freeRemaining, setFreeRemaining] = useState<number | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [allContentTypes, setAllContentTypes] = useState<ContentType[]>([]);
@@ -115,15 +110,10 @@ export default function ClipDetailScreen() {
       let active = true;
       (async () => {
         const [s, cts] = await Promise.all([getSettings(), getAllContentTypes()]);
-        const hasOwnKey = Object.values(s.aiKeys).some(
-          (v) => typeof v === "string" && v !== null && v.trim().length > 0
-        );
-        const rem = hasOwnKey ? null : await getFreeAnalysesRemaining();
         if (active) {
           setAiSettings(s);
           setLocalModules(s.aiModules);
           setLocalDepth(s.aiDepth);
-          setFreeRemaining(rem);
           setAllContentTypes(cts);
         }
       })();
@@ -263,9 +253,7 @@ export default function ClipDetailScreen() {
     );
 
   const canAnalyze =
-    (!!currentApiKey || (noKeyConfigured && (freeRemaining ?? 0) > 0)) &&
-    !!aiSettings?.aiProvider &&
-    hasAnalyzableContent;
+    !!currentApiKey && !!aiSettings?.aiProvider && hasAnalyzableContent;
 
   // Show the onboarding CTA when there's something to analyse but no key set.
   const showOnboardingButton =
@@ -299,25 +287,11 @@ export default function ClipDetailScreen() {
   const handleAnalyze = async (overrideMaxTokens?: number) => {
     if (!aiSettings?.aiProvider) return;
 
-    let apiKeyToUse: string | null = aiSettings.aiKeys[aiSettings.aiProvider] ?? null;
-    let providerToUse: AiProvider = aiSettings.aiProvider;
-    const usingBuiltIn = !apiKeyToUse;
-
+    const apiKeyToUse: string | null = aiSettings.aiKeys[aiSettings.aiProvider] ?? null;
+    const providerToUse: AiProvider = aiSettings.aiProvider;
     if (!apiKeyToUse) {
-      const remaining = await getFreeAnalysesRemaining();
-      if (remaining <= 0) {
-        Alert.alert(
-          "Бесплатные анализы закончились",
-          "Ты использовал все 10 бесплатных анализов. Добавь свой API ключ в настройках чтобы продолжить — это займёт 2 минуты.",
-          [
-            { text: "Настроить ключ", onPress: () => router.push("/settings") },
-            { text: "Позже", style: "cancel" },
-          ]
-        );
-        return;
-      }
-      apiKeyToUse = BUILT_IN_API_KEY;
-      providerToUse = BUILT_IN_PROVIDER;
+      router.push("/settings");
+      return;
     }
 
     const m = localModules ?? aiSettings.aiModules;
@@ -361,10 +335,6 @@ export default function ClipDetailScreen() {
         return;
       }
       await editClipSummary(clip.id, result.text, result.truncated);
-      if (usingBuiltIn) {
-        const newRemaining = await incrementFreeAnalyses();
-        setFreeRemaining(newRemaining);
-      }
       if (result.truncated) {
         const currentMax = getMaxTokens(
           localDepth ?? aiSettings.aiDepth,
@@ -852,11 +822,6 @@ export default function ClipDetailScreen() {
       fontFamily: "Inter_400Regular",
       color: colors.textSecondary,
     },
-    freeCounterText: {
-      fontSize: 11,
-      fontFamily: "Inter_400Regular",
-      color: colors.textMuted,
-    },
     deleteBtn: {
       flexDirection: "row",
       alignItems: "center",
@@ -1233,24 +1198,6 @@ export default function ClipDetailScreen() {
                 </View>
               );
             })()}
-
-            {noKeyConfigured && freeRemaining !== null && (
-              freeRemaining > 3 ? (
-                <Text style={s.freeCounterText}>
-                  {"✦ "}{freeRemaining} бесплатных анализов
-                </Text>
-              ) : freeRemaining > 0 ? (
-                <Text style={[s.freeCounterText, { color: colors.accent }]}>
-                  {"⚠ Осталось "}{freeRemaining} {freeRemaining === 1 ? "бесплатный анализ" : "бесплатных анализа"}
-                </Text>
-              ) : (
-                <TouchableOpacity onPress={() => router.push("/settings")}>
-                  <Text style={[s.freeCounterText, { color: colors.accentDim }]}>
-                    Бесплатные анализы закончились · Настроить ключ →
-                  </Text>
-                </TouchableOpacity>
-              )
-            )}
 
             {costEstimate !== null && (
               <Text style={s.costEstimateText}>

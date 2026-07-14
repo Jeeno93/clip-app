@@ -304,7 +304,7 @@ export default function OnboardingScreen() {
             <>
               <Text style={s.headline}>AI анализирует статьи за тебя</Text>
               <Text style={s.subtitle}>
-                {"У тебя есть 10 бесплатных анализов.\nПотом можно добавить свой API ключ — это займёт 2 минуты и стоит копейки."}
+                {"Добавь свой API ключ в настройках — это займёт 2 минуты и стоит копейки."}
               </Text>
               <View style={s.illustrationBox}>
                 {[
