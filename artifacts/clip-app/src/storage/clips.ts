@@ -7,6 +7,7 @@ const DAILY_CARDS_KEY = "@clip:daily_cards";
 const DAILY_DATE_KEY = "@clip:daily_date";
 const DOMAINS_KEY = "@clip:domains";
 const TAG_ENTRIES_KEY = "@clip:tag_entries";
+const DEVICE_ID_KEY = "@clip:device_id";
 
 export interface Clip {
   id: string;
@@ -167,6 +168,18 @@ export interface Settings {
 
 function generateId(): string {
   return Date.now().toString() + Math.random().toString(36).substr(2, 9);
+}
+
+// Anonymous per-install identifier — only used to bucket the server-side
+// free AI-analysis quota, not tied to any personal data. Resettable by
+// reinstalling, which is an acceptable/low-value abuse path at this scale
+// (see clip-app-api's daily per-device + per-IP limits).
+export async function getOrCreateDeviceId(): Promise<string> {
+  const existing = await AsyncStorage.getItem(DEVICE_ID_KEY);
+  if (existing) return existing;
+  const id = generateId();
+  await AsyncStorage.setItem(DEVICE_ID_KEY, id);
+  return id;
 }
 
 function todayKey(): string {

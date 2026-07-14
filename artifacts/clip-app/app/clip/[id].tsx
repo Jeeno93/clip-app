@@ -34,8 +34,15 @@ import {
   AiProvider,
   getAllContentTypes,
   ContentType,
+  getOrCreateDeviceId,
 } from "../../src/storage/clips";
-import { summarizeContent, getMaxTokens, SummarizeResult } from "../../src/utils/summarize";
+import {
+  summarizeContent,
+  summarizeViaProxy,
+  getProxyQuotaRemaining,
+  getMaxTokens,
+  SummarizeResult,
+} from "../../src/utils/summarize";
 import { estimateCost, CostEstimate } from "../../src/utils/cost";
 
 function getDomain(url: string): string {
@@ -90,6 +97,7 @@ export default function ClipDetailScreen() {
   const [aiSettings, setAiSettings] = useState<Settings | null>(null);
   const [localModules, setLocalModules] = useState<AiModules | null>(null);
   const [localDepth, setLocalDepth] = useState<AiDepth | null>(null);
+  const [freeRemaining, setFreeRemaining] = useState<number | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [allContentTypes, setAllContentTypes] = useState<ContentType[]>([]);
@@ -110,10 +118,17 @@ export default function ClipDetailScreen() {
       let active = true;
       (async () => {
         const [s, cts] = await Promise.all([getSettings(), getAllContentTypes()]);
+        const hasOwnKey = Object.values(s.aiKeys).some(
+          (v) => typeof v === "string" && v !== null && v.trim().length > 0
+        );
+        const rem = hasOwnKey
+          ? null
+          : await getProxyQuotaRemaining(await getOrCreateDeviceId());
         if (active) {
           setAiSettings(s);
           setLocalModules(s.aiModules);
           setLocalDepth(s.aiDepth);
+          setFreeRemaining(rem);
           setAllContentTypes(cts);
         }
       })();
@@ -253,7 +268,9 @@ export default function ClipDetailScreen() {
     );
 
   const canAnalyze =
-    !!currentApiKey && !!aiSettings?.aiProvider && hasAnalyzableContent;
+    (!!currentApiKey || (noKeyConfigured && (freeRemaining ?? 0) > 0)) &&
+    !!aiSettings?.aiProvider &&
+    hasAnalyzableContent;
 
   // Show the onboarding CTA when there's something to analyse but no key set.
   const showOnboardingButton =
@@ -265,14 +282,15 @@ export default function ClipDetailScreen() {
       clip.linkPreview?.description?.length ??
       clip.text?.length ??
       0;
-    if (!textLength || !aiSettings?.aiProvider) return null;
+    // No cost to show when the free proxy tier is footing the bill.
+    if (!textLength || !aiSettings?.aiProvider || !currentApiKey) return null;
     return estimateCost(
       textLength,
       aiSettings.aiProvider,
       localDepth ?? aiSettings.aiDepth,
       localModules ?? aiSettings.aiModules
     );
-  }, [localDepth, localModules, aiSettings?.aiDepth, aiSettings?.aiProvider, clip]);
+  }, [localDepth, localModules, aiSettings?.aiDepth, aiSettings?.aiProvider, currentApiKey, clip]);
 
   const handleShareSummary = async () => {
     if (!clip.summary) return;
@@ -289,8 +307,17 @@ export default function ClipDetailScreen() {
 
     const apiKeyToUse: string | null = aiSettings.aiKeys[aiSettings.aiProvider] ?? null;
     const providerToUse: AiProvider = aiSettings.aiProvider;
-    if (!apiKeyToUse) {
-      router.push("/settings");
+    const usingFreeProxy = !apiKeyToUse;
+
+    if (usingFreeProxy && (freeRemaining ?? 0) <= 0) {
+      Alert.alert(
+        "Бесплатный лимит на сегодня исчерпан",
+        "Попробуй завтра, или добавь свой API ключ в настройках — это займёт 2 минуты и стоит копейки.",
+        [
+          { text: "Настроить ключ", onPress: () => router.push("/settings") },
+          { text: "Позже", style: "cancel" },
+        ]
+      );
       return;
     }
 
@@ -310,17 +337,44 @@ export default function ClipDetailScreen() {
       const text = buildAnalysisInput();
       const contentType = allContentTypes.find((t) => t.id === clip?.contentTypeId);
       const contentTypeHint = contentType?.promptHint;
-      const result = await summarizeContent(
-        text,
-        providerToUse,
-        apiKeyToUse,
-        localDepth ?? aiSettings.aiDepth,
-        localModules ?? aiSettings.aiModules,
-        overrideMaxTokens,
-        contentTypeHint
-      );
+      const depth = localDepth ?? aiSettings.aiDepth;
+      const modules = localModules ?? aiSettings.aiModules;
+
+      const result = usingFreeProxy
+        ? await summarizeViaProxy(
+            text,
+            depth,
+            modules,
+            await getOrCreateDeviceId(),
+            contentTypeHint
+          )
+        : await summarizeContent(
+            text,
+            providerToUse,
+            apiKeyToUse!,
+            depth,
+            modules,
+            overrideMaxTokens,
+            contentTypeHint
+          );
+
       if (result === "AUTH_ERROR") {
         Alert.alert("Ошибка", "Неверный API ключ. Проверь настройки.");
+        return;
+      }
+      if (result === "QUOTA_EXCEEDED") {
+        setFreeRemaining(0);
+        Alert.alert(
+          "Бесплатный лимит на сегодня исчерпан",
+          "Попробуй завтра, или добавь свой API ключ в настройках."
+        );
+        return;
+      }
+      if (result === "NOT_CONFIGURED") {
+        Alert.alert(
+          "Бесплатный анализ пока недоступен",
+          "Добавь свой API ключ в настройках, чтобы пользоваться анализом уже сейчас."
+        );
         return;
       }
       if (!result) {
@@ -335,6 +389,10 @@ export default function ClipDetailScreen() {
         return;
       }
       await editClipSummary(clip.id, result.text, result.truncated);
+      if (usingFreeProxy) {
+        const rem = (result as { remaining?: number }).remaining;
+        if (typeof rem === "number") setFreeRemaining(rem);
+      }
       if (result.truncated) {
         const currentMax = getMaxTokens(
           localDepth ?? aiSettings.aiDepth,
@@ -822,6 +880,11 @@ export default function ClipDetailScreen() {
       fontFamily: "Inter_400Regular",
       color: colors.textSecondary,
     },
+    freeCounterText: {
+      fontSize: 11,
+      fontFamily: "Inter_400Regular",
+      color: colors.textMuted,
+    },
     deleteBtn: {
       flexDirection: "row",
       alignItems: "center",
@@ -1198,6 +1261,20 @@ export default function ClipDetailScreen() {
                 </View>
               );
             })()}
+
+            {noKeyConfigured && freeRemaining !== null && (
+              freeRemaining > 0 ? (
+                <Text style={s.freeCounterText}>
+                  {"✦ Бесплатно сегодня: "}{freeRemaining} {freeRemaining === 1 ? "анализ" : "анализа"}
+                </Text>
+              ) : (
+                <TouchableOpacity onPress={() => router.push("/settings")}>
+                  <Text style={[s.freeCounterText, { color: colors.accentDim }]}>
+                    Бесплатный лимит на сегодня исчерпан · Настроить ключ →
+                  </Text>
+                </TouchableOpacity>
+              )
+            )}
 
             {costEstimate !== null && (
               <Text style={s.costEstimateText}>

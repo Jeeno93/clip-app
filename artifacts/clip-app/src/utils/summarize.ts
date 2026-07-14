@@ -317,6 +317,76 @@ async function callYandex(
   return typeof text === "string" && text.trim() ? { text: text.trim(), truncated, timedOut: false } : null;
 }
 
+const CLIP_API_URL = process.env.EXPO_PUBLIC_CLIP_API_URL;
+
+export type ProxySummarizeResult =
+  | (SummarizeResult & { remaining: number })
+  | "AUTH_ERROR"
+  | "QUOTA_EXCEEDED"
+  | "NOT_CONFIGURED"
+  | null;
+
+/**
+ * Free-tier path for users without their own API key. Calls clip-app-api,
+ * which holds the real provider key server-side and enforces the daily
+ * quota itself — the client never sees a secret, unlike the old
+ * BUILT_IN_API_KEY approach.
+ */
+export async function summarizeViaProxy(
+  text: string,
+  depth: AiDepth,
+  modules: AiModules,
+  deviceId: string,
+  contentTypeHint?: string
+): Promise<ProxySummarizeResult> {
+  if (!CLIP_API_URL) return "NOT_CONFIGURED";
+
+  const timeoutMs = getTimeoutMs(text.length, depth);
+  try {
+    const res = await fetchWithTimeout(
+      `${CLIP_API_URL}/api/analyze`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deviceId, text, depth, modules, contentTypeHint }),
+      },
+      timeoutMs
+    );
+    if (res.status === 429) return "QUOTA_EXCEEDED";
+    if (res.status === 503) return "NOT_CONFIGURED";
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
+    if (typeof data?.text !== "string" || !data.text.trim()) return null;
+    return {
+      text: data.text.trim(),
+      truncated: !!data.truncated,
+      timedOut: false,
+      remaining: typeof data.remaining === "number" ? data.remaining : 0,
+    };
+  } catch (error: any) {
+    if (error?.name === "AbortError") {
+      return { text: "", truncated: false, timedOut: true, remaining: 0 };
+    }
+    throw new Error(typeof error?.message === "string" ? error.message : "Proxy request failed");
+  }
+}
+
+export async function getProxyQuotaRemaining(deviceId: string): Promise<number | null> {
+  if (!CLIP_API_URL) return null;
+  try {
+    const res = await fetchWithTimeout(
+      `${CLIP_API_URL}/api/analyze/quota?deviceId=${encodeURIComponent(deviceId)}`,
+      { method: "GET" },
+      10000
+    );
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => ({}));
+    return typeof data?.remaining === "number" ? data.remaining : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function summarizeContent(
   text: string,
   provider: AiProvider,
