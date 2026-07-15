@@ -276,7 +276,7 @@ export default function OnboardingScreen() {
                 {[
                   "Выдели текст в любом приложении",
                   'Нажми "Поделиться"',
-                  "Выбери Clip из списка",
+                  "Выбери Clip из списка — идея в архиве и готова к AI-конспекту в любой момент",
                 ].map((text, i) => (
                   <View key={i} style={s.illustrationStep}>
                     <View style={s.illustrationStepNum}>

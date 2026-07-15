@@ -690,7 +690,8 @@ export default function SettingsScreen() {
         <View style={s.section}>
           <Text style={s.sectionLabel}>AI-анализ (бета)</Text>
           <Text style={s.sectionHint}>
-            Конспекты статей с помощью твоего API ключа.
+            Бесплатно: 2 анализа в день на DeepSeek, без ключа и без выбора
+            ниже. Хочешь больше или другую модель — добавь свой ключ.
           </Text>
 
           {!Object.values(aiKeys).some(
