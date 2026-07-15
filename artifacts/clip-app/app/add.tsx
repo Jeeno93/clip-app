@@ -1,3 +1,4 @@
+import * as amplitude from "@amplitude/analytics-react-native";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as IntentLauncher from "expo-intent-launcher";
@@ -192,6 +193,11 @@ export default function AddClipScreen() {
     );
     setSaving(false);
     if (clip) {
+      amplitude.track("clip_saved", {
+        source,
+        hasTags: tags.length > 0,
+        hasLinkPreview: !!linkPreview,
+      });
       router.back();
     }
   };

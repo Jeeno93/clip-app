@@ -1,3 +1,4 @@
+import * as amplitude from "@amplitude/analytics-react-native";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
@@ -51,6 +52,7 @@ export default function OnboardingScreen() {
     }
     await saveSettings({ notificationHour: hour, onboardingDone: true });
     await addDemoClips();
+    amplitude.track("onboarding_completed", { notificationHour: hour });
     router.replace("/(tabs)");
   };
 
@@ -274,7 +276,7 @@ export default function OnboardingScreen() {
                 {[
                   "Выдели текст в любом приложении",
                   'Нажми "Поделиться"',
-                  "Выбери Clip из списка",
+                  "Выбери Clip из списка — идея в архиве и готова к AI-конспекту в любой момент",
                 ].map((text, i) => (
                   <View key={i} style={s.illustrationStep}>
                     <View style={s.illustrationStepNum}>
@@ -304,7 +306,7 @@ export default function OnboardingScreen() {
             <>
               <Text style={s.headline}>AI анализирует статьи за тебя</Text>
               <Text style={s.subtitle}>
-                {"У тебя есть 10 бесплатных анализов.\nПотом можно добавить свой API ключ — это займёт 2 минуты и стоит копейки."}
+                {"Пара анализов в день — бесплатно, без настройки.\nНужно больше? Добавь свой API ключ — это займёт 2 минуты и стоит копейки."}
               </Text>
               <View style={s.illustrationBox}>
                 {[

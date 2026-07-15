@@ -7,34 +7,7 @@ const DAILY_CARDS_KEY = "@clip:daily_cards";
 const DAILY_DATE_KEY = "@clip:daily_date";
 const DOMAINS_KEY = "@clip:domains";
 const TAG_ENTRIES_KEY = "@clip:tag_entries";
-
-const BUILT_IN_API_KEY = "sk-c4d5d2069a6443699acaa4ade2a8e9dc";
-const BUILT_IN_PROVIDER = "deepseek" as const;
-const FREE_ANALYSES_LIMIT = 10;
-const FREE_ANALYSES_KEY = "@clip:free_analyses_used";
-
-export async function getFreeAnalysesUsed(): Promise<number> {
-  try {
-    const raw = await AsyncStorage.getItem(FREE_ANALYSES_KEY);
-    return raw ? parseInt(raw, 10) : 0;
-  } catch {
-    return 0;
-  }
-}
-
-export async function incrementFreeAnalyses(): Promise<number> {
-  const used = await getFreeAnalysesUsed();
-  const newUsed = used + 1;
-  await AsyncStorage.setItem(FREE_ANALYSES_KEY, String(newUsed));
-  return newUsed;
-}
-
-export async function getFreeAnalysesRemaining(): Promise<number> {
-  const used = await getFreeAnalysesUsed();
-  return Math.max(0, FREE_ANALYSES_LIMIT - used);
-}
-
-export { BUILT_IN_API_KEY, BUILT_IN_PROVIDER, FREE_ANALYSES_LIMIT };
+const DEVICE_ID_KEY = "@clip:device_id";
 
 export interface Clip {
   id: string;
@@ -195,6 +168,18 @@ export interface Settings {
 
 function generateId(): string {
   return Date.now().toString() + Math.random().toString(36).substr(2, 9);
+}
+
+// Анонимный идентификатор установки — используется только для учёта
+// бесплатной квоты AI-анализа на сервере, с личными данными не связан.
+// Сбрасывается переустановкой — это допустимый малоценный способ обхода
+// при таком масштабе (см. дневные лимиты на device/IP в clip-app-api).
+export async function getOrCreateDeviceId(): Promise<string> {
+  const existing = await AsyncStorage.getItem(DEVICE_ID_KEY);
+  if (existing) return existing;
+  const id = generateId();
+  await AsyncStorage.setItem(DEVICE_ID_KEY, id);
+  return id;
 }
 
 function todayKey(): string {

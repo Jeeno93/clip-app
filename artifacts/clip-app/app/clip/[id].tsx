@@ -1,3 +1,4 @@
+import * as amplitude from "@amplitude/analytics-react-native";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
@@ -32,14 +33,17 @@ import {
   AiModules,
   AiDepth,
   AiProvider,
-  getFreeAnalysesRemaining,
-  incrementFreeAnalyses,
-  BUILT_IN_API_KEY,
-  BUILT_IN_PROVIDER,
   getAllContentTypes,
   ContentType,
+  getOrCreateDeviceId,
 } from "../../src/storage/clips";
-import { summarizeContent, getMaxTokens, SummarizeResult } from "../../src/utils/summarize";
+import {
+  summarizeContent,
+  summarizeViaProxy,
+  getProxyQuotaRemaining,
+  getMaxTokens,
+  SummarizeResult,
+} from "../../src/utils/summarize";
 import { estimateCost, CostEstimate } from "../../src/utils/cost";
 
 function getDomain(url: string): string {
@@ -118,7 +122,9 @@ export default function ClipDetailScreen() {
         const hasOwnKey = Object.values(s.aiKeys).some(
           (v) => typeof v === "string" && v !== null && v.trim().length > 0
         );
-        const rem = hasOwnKey ? null : await getFreeAnalysesRemaining();
+        const rem = hasOwnKey
+          ? null
+          : await getProxyQuotaRemaining(await getOrCreateDeviceId());
         if (active) {
           setAiSettings(s);
           setLocalModules(s.aiModules);
@@ -250,24 +256,30 @@ export default function ClipDetailScreen() {
     ? aiSettings.aiKeys[aiSettings.aiProvider]
     : null;
 
-  // Disable the analyze button when there's literally nothing to send —
-  // matches the "⚠ Нет текста для анализа" indicator below.
+  // Кнопка анализа недоступна, если отправлять буквально нечего —
+  // соответствует индикатору «⚠ Нет текста для анализа» ниже.
   const hasAnalysisInput = buildAnalysisInput().trim().length > 0;
   const hasAnalyzableContent =
     hasAnalysisInput && (!!clip.linkPreview || clip.text.length > 200);
-  // True only once settings have loaded and every provider key is blank.
+  // true, только когда настройки уже загрузились и все ключи провайдеров пустые.
   const noKeyConfigured =
     aiSettings !== null &&
     !Object.values(aiSettings.aiKeys).some(
       (v) => typeof v === "string" && v.trim().length > 0
     );
 
+  // freeRemaining равен null, пока опрос квоты не завершился — в том числе
+  // если он упал по таймауту (см. getProxyQuotaRemaining). Если трактовать
+  // «неизвестно» так же, как «ноль», пользователей с оставшейся квотой будет
+  // ошибочно направлять в модалку «нужен платный ключ» каждый раз, когда
+  // опрос не успел вернуться вовремя — поэтому блокируем только при
+  // подтверждённом нуле; реальный лимит всё равно проверяется на сервере.
   const canAnalyze =
-    (!!currentApiKey || (noKeyConfigured && (freeRemaining ?? 0) > 0)) &&
+    (!!currentApiKey || (noKeyConfigured && freeRemaining !== 0)) &&
     !!aiSettings?.aiProvider &&
     hasAnalyzableContent;
 
-  // Show the onboarding CTA when there's something to analyse but no key set.
+  // Показываем онбординг-CTA, когда есть что анализировать, но ключ не задан.
   const showOnboardingButton =
     hasAnalyzableContent && noKeyConfigured && !clip.summary;
 
@@ -277,14 +289,15 @@ export default function ClipDetailScreen() {
       clip.linkPreview?.description?.length ??
       clip.text?.length ??
       0;
-    if (!textLength || !aiSettings?.aiProvider) return null;
+    // Не показываем стоимость, если счёт оплачивает бесплатный прокси-тариф.
+    if (!textLength || !aiSettings?.aiProvider || !currentApiKey) return null;
     return estimateCost(
       textLength,
       aiSettings.aiProvider,
       localDepth ?? aiSettings.aiDepth,
       localModules ?? aiSettings.aiModules
     );
-  }, [localDepth, localModules, aiSettings?.aiDepth, aiSettings?.aiProvider, clip]);
+  }, [localDepth, localModules, aiSettings?.aiDepth, aiSettings?.aiProvider, currentApiKey, clip]);
 
   const handleShareSummary = async () => {
     if (!clip.summary) return;
@@ -299,25 +312,20 @@ export default function ClipDetailScreen() {
   const handleAnalyze = async (overrideMaxTokens?: number) => {
     if (!aiSettings?.aiProvider) return;
 
-    let apiKeyToUse: string | null = aiSettings.aiKeys[aiSettings.aiProvider] ?? null;
-    let providerToUse: AiProvider = aiSettings.aiProvider;
-    const usingBuiltIn = !apiKeyToUse;
+    const apiKeyToUse: string | null = aiSettings.aiKeys[aiSettings.aiProvider] ?? null;
+    const providerToUse: AiProvider = aiSettings.aiProvider;
+    const usingFreeProxy = !apiKeyToUse;
 
-    if (!apiKeyToUse) {
-      const remaining = await getFreeAnalysesRemaining();
-      if (remaining <= 0) {
-        Alert.alert(
-          "Бесплатные анализы закончились",
-          "Ты использовал все 10 бесплатных анализов. Добавь свой API ключ в настройках чтобы продолжить — это займёт 2 минуты.",
-          [
-            { text: "Настроить ключ", onPress: () => router.push("/settings") },
-            { text: "Позже", style: "cancel" },
-          ]
-        );
-        return;
-      }
-      apiKeyToUse = BUILT_IN_API_KEY;
-      providerToUse = BUILT_IN_PROVIDER;
+    if (usingFreeProxy && freeRemaining === 0) {
+      Alert.alert(
+        "Бесплатный лимит на сегодня исчерпан",
+        "Попробуй завтра, или добавь свой API ключ в настройках — это займёт 2 минуты и стоит копейки.",
+        [
+          { text: "Настроить ключ", onPress: () => router.push("/settings") },
+          { text: "Позже", style: "cancel" },
+        ]
+      );
+      return;
     }
 
     const m = localModules ?? aiSettings.aiModules;
@@ -332,38 +340,72 @@ export default function ClipDetailScreen() {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setAnalyzing(true);
+    const depth = localDepth ?? aiSettings.aiDepth;
+    amplitude.track("analyze_started", { usingFreeProxy, depth });
     try {
       const text = buildAnalysisInput();
       const contentType = allContentTypes.find((t) => t.id === clip?.contentTypeId);
       const contentTypeHint = contentType?.promptHint;
-      const result = await summarizeContent(
-        text,
-        providerToUse,
-        apiKeyToUse,
-        localDepth ?? aiSettings.aiDepth,
-        localModules ?? aiSettings.aiModules,
-        overrideMaxTokens,
-        contentTypeHint
-      );
+      const modules = localModules ?? aiSettings.aiModules;
+
+      const result = usingFreeProxy
+        ? await summarizeViaProxy(
+            text,
+            depth,
+            modules,
+            await getOrCreateDeviceId(),
+            contentTypeHint
+          )
+        : await summarizeContent(
+            text,
+            providerToUse,
+            apiKeyToUse!,
+            depth,
+            modules,
+            overrideMaxTokens,
+            contentTypeHint
+          );
+
       if (result === "AUTH_ERROR") {
+        amplitude.track("analyze_failed", { reason: "auth_error", usingFreeProxy });
         Alert.alert("Ошибка", "Неверный API ключ. Проверь настройки.");
         return;
       }
+      if (result === "QUOTA_EXCEEDED") {
+        amplitude.track("analyze_quota_exceeded");
+        setFreeRemaining(0);
+        Alert.alert(
+          "Бесплатный лимит на сегодня исчерпан",
+          "Попробуй завтра, или добавь свой API ключ в настройках."
+        );
+        return;
+      }
+      if (result === "NOT_CONFIGURED") {
+        amplitude.track("analyze_failed", { reason: "proxy_not_configured", usingFreeProxy });
+        Alert.alert(
+          "Бесплатный анализ пока недоступен",
+          "Добавь свой API ключ в настройках, чтобы пользоваться анализом уже сейчас."
+        );
+        return;
+      }
       if (!result) {
+        amplitude.track("analyze_failed", { reason: "empty_response", usingFreeProxy });
         Alert.alert("Ошибка", "Не удалось получить ответ. Попробуй позже.");
         return;
       }
       if (result.timedOut) {
+        amplitude.track("analyze_failed", { reason: "timed_out", usingFreeProxy });
         Alert.alert(
           "Время ожидания истекло",
           "Материал слишком большой для текущих настроек. Попробуй уменьшить глубину или количество модулей."
         );
         return;
       }
+      amplitude.track("analyze_completed", { usingFreeProxy, depth, truncated: result.truncated });
       await editClipSummary(clip.id, result.text, result.truncated);
-      if (usingBuiltIn) {
-        const newRemaining = await incrementFreeAnalyses();
-        setFreeRemaining(newRemaining);
+      if (usingFreeProxy) {
+        const rem = (result as { remaining?: number }).remaining;
+        if (typeof rem === "number") setFreeRemaining(rem);
       }
       if (result.truncated) {
         const currentMax = getMaxTokens(
@@ -381,6 +423,7 @@ export default function ClipDetailScreen() {
         );
       }
     } catch (error: any) {
+      amplitude.track("analyze_failed", { reason: "exception", usingFreeProxy });
       Alert.alert("Ошибка AI", error?.message || "Неизвестная ошибка");
     } finally {
       setAnalyzing(false);
@@ -1235,18 +1278,14 @@ export default function ClipDetailScreen() {
             })()}
 
             {noKeyConfigured && freeRemaining !== null && (
-              freeRemaining > 3 ? (
+              freeRemaining > 0 ? (
                 <Text style={s.freeCounterText}>
-                  {"✦ "}{freeRemaining} бесплатных анализов
-                </Text>
-              ) : freeRemaining > 0 ? (
-                <Text style={[s.freeCounterText, { color: colors.accent }]}>
-                  {"⚠ Осталось "}{freeRemaining} {freeRemaining === 1 ? "бесплатный анализ" : "бесплатных анализа"}
+                  {"✦ Бесплатно сегодня: "}{freeRemaining} {freeRemaining === 1 ? "анализ" : "анализа"}
                 </Text>
               ) : (
                 <TouchableOpacity onPress={() => router.push("/settings")}>
                   <Text style={[s.freeCounterText, { color: colors.accentDim }]}>
-                    Бесплатные анализы закончились · Настроить ключ →
+                    Бесплатный лимит на сегодня исчерпан · Настроить ключ →
                   </Text>
                 </TouchableOpacity>
               )
