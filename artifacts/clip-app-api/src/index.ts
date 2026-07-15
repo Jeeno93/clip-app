@@ -147,6 +147,25 @@ async function callDeepSeek(systemPrompt: string, userPrompt: string, maxTokens:
 
 const app = express();
 app.use(cors());
+
+// Logs every request as it arrives (before body parsing, so it fires even
+// if the client aborts/times out before the body finishes) and again on
+// completion with status+duration - lets us see from the Amvera log
+// whether a request from the app ever reached the process at all.
+app.use((req, res, next) => {
+  const start = Date.now();
+  console.log(`[req] ${req.method} ${req.path} from ${req.ip}`);
+  res.on("finish", () => {
+    console.log(`[res] ${req.method} ${req.path} -> ${res.statusCode} (${Date.now() - start}ms)`);
+  });
+  res.on("close", () => {
+    if (!res.writableEnded) {
+      console.log(`[res] ${req.method} ${req.path} -> connection closed before response finished (${Date.now() - start}ms)`);
+    }
+  });
+  next();
+});
+
 app.use(express.json({ limit: "1mb" }));
 
 app.get("/health", (_req, res) => {
