@@ -256,24 +256,30 @@ export default function ClipDetailScreen() {
     ? aiSettings.aiKeys[aiSettings.aiProvider]
     : null;
 
-  // Disable the analyze button when there's literally nothing to send —
-  // matches the "⚠ Нет текста для анализа" indicator below.
+  // Кнопка анализа недоступна, если отправлять буквально нечего —
+  // соответствует индикатору «⚠ Нет текста для анализа» ниже.
   const hasAnalysisInput = buildAnalysisInput().trim().length > 0;
   const hasAnalyzableContent =
     hasAnalysisInput && (!!clip.linkPreview || clip.text.length > 200);
-  // True only once settings have loaded and every provider key is blank.
+  // true, только когда настройки уже загрузились и все ключи провайдеров пустые.
   const noKeyConfigured =
     aiSettings !== null &&
     !Object.values(aiSettings.aiKeys).some(
       (v) => typeof v === "string" && v.trim().length > 0
     );
 
+  // freeRemaining равен null, пока опрос квоты не завершился — в том числе
+  // если он упал по таймауту (см. getProxyQuotaRemaining). Если трактовать
+  // «неизвестно» так же, как «ноль», пользователей с оставшейся квотой будет
+  // ошибочно направлять в модалку «нужен платный ключ» каждый раз, когда
+  // опрос не успел вернуться вовремя — поэтому блокируем только при
+  // подтверждённом нуле; реальный лимит всё равно проверяется на сервере.
   const canAnalyze =
-    (!!currentApiKey || (noKeyConfigured && (freeRemaining ?? 0) > 0)) &&
+    (!!currentApiKey || (noKeyConfigured && freeRemaining !== 0)) &&
     !!aiSettings?.aiProvider &&
     hasAnalyzableContent;
 
-  // Show the onboarding CTA when there's something to analyse but no key set.
+  // Показываем онбординг-CTA, когда есть что анализировать, но ключ не задан.
   const showOnboardingButton =
     hasAnalyzableContent && noKeyConfigured && !clip.summary;
 
@@ -283,7 +289,7 @@ export default function ClipDetailScreen() {
       clip.linkPreview?.description?.length ??
       clip.text?.length ??
       0;
-    // No cost to show when the free proxy tier is footing the bill.
+    // Не показываем стоимость, если счёт оплачивает бесплатный прокси-тариф.
     if (!textLength || !aiSettings?.aiProvider || !currentApiKey) return null;
     return estimateCost(
       textLength,
@@ -310,7 +316,7 @@ export default function ClipDetailScreen() {
     const providerToUse: AiProvider = aiSettings.aiProvider;
     const usingFreeProxy = !apiKeyToUse;
 
-    if (usingFreeProxy && (freeRemaining ?? 0) <= 0) {
+    if (usingFreeProxy && freeRemaining === 0) {
       Alert.alert(
         "Бесплатный лимит на сегодня исчерпан",
         "Попробуй завтра, или добавь свой API ключ в настройках — это займёт 2 минуты и стоит копейки.",

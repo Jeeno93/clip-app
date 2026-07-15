@@ -341,6 +341,20 @@ export async function summarizeViaProxy(
 ): Promise<ProxySummarizeResult> {
   if (!CLIP_API_URL) return "NOT_CONFIGURED";
 
+  // Таймаут простоя соединения на Envoy короче, чем ~5 минут, которые OkHttp
+  // держит соединение в пуле, поэтому к моменту, когда пользователь дочитал
+  // карточку и нажал «Анализировать», соединение, которое OkHttp хочет
+  // переиспользовать, уже может быть мертво на сервере — и POST просто
+  // зависает. В отличие от опроса квоты (только чтение), ретраить сам вызов
+  // анализа небезопасно — сервер списывает квоту до того, как сформирован
+  // ответ, поэтому «завис → повторили» может сжечь оба дневных бесплатных
+  // анализа на одном нестабильном соединении. Пинг /health перед этим —
+  // дешёвый, не мутирующий способ вытеснить протухшее соединение, чтобы
+  // реальный POST ушёл по заведомо живому.
+  try {
+    await fetchWithTimeout(`${CLIP_API_URL}/health`, { method: "GET" }, 5000);
+  } catch {}
+
   const timeoutMs = getTimeoutMs(text.length, depth);
   try {
     const res = await fetchWithTimeout(
@@ -371,14 +385,31 @@ export async function summarizeViaProxy(
   }
 }
 
+async function fetchQuotaOnce(deviceId: string): Promise<Response> {
+  return fetchWithTimeout(
+    `${CLIP_API_URL}/api/analyze/quota?deviceId=${encodeURIComponent(deviceId)}`,
+    { method: "GET" },
+    10000
+  );
+}
+
 export async function getProxyQuotaRemaining(deviceId: string): Promise<number | null> {
   if (!CLIP_API_URL) return null;
   try {
-    const res = await fetchWithTimeout(
-      `${CLIP_API_URL}/api/analyze/quota?deviceId=${encodeURIComponent(deviceId)}`,
-      { method: "GET" },
-      10000
-    );
+    let res: Response;
+    try {
+      res = await fetchQuotaOnce(deviceId);
+    } catch (error: any) {
+      // Android-овский OkHttp держит соединения в пуле до 5 минут простоя —
+      // дольше, чем таймаут простоя на Envoy, поэтому переиспользованное
+      // соединение может быть мертво ещё до отправки, и запрос просто висит,
+      // пока его не оборвёт наш собственный таймаут. Неудачная попытка
+      // вытесняет это соединение из пула OkHttp, так что повтор почти всегда
+      // получает свежее. Ретраить безопасно: этот GET только читает — в
+      // отличие от POST-анализа, он не может дважды списать дневную квоту.
+      if (error?.name !== "AbortError") throw error;
+      res = await fetchQuotaOnce(deviceId);
+    }
     if (!res.ok) return null;
     const data = await res.json().catch(() => ({}));
     return typeof data?.remaining === "number" ? data.remaining : null;

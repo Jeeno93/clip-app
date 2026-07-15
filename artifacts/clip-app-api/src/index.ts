@@ -5,10 +5,11 @@ import express from "express";
 const PORT = process.env.PORT || 80;
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 
-// Daily caps — deliberately small. A shared free pool is bot bait; a small
-// daily trickle per device is nearly invisible to a real user (a couple of
-// analyses a day) but makes scripted draining low-value (has to run for
-// weeks to add up to anything, instead of one request against a giant pool).
+// Дневные лимиты — намеренно маленькие. Общий бесплатный пул — приманка для
+// ботов; маленькая суточная порция на устройство почти незаметна живому
+// пользователю (пара анализов в день), но делает скриптовую выкачку
+// невыгодной (нужно гнать недели, чтобы набрать что-то заметное, вместо
+// одного запроса против большого общего пула).
 const DAILY_LIMIT_PER_DEVICE = 2;
 const DAILY_LIMIT_PER_IP = 10;
 
@@ -26,9 +27,9 @@ interface QuotaEntry {
   day: string; // YYYY-MM-DD, UTC
 }
 
-// In-memory only — quota resets naturally at UTC midnight, and an occasional
-// reset from a redeploy is an acceptable trade for not needing a DB just to
-// throttle a free tier at this scale.
+// Только в памяти — квота естественным образом сбрасывается в полночь UTC,
+// а случайный сброс при передеплое — приемлемая цена за то, чтобы не
+// заводить БД ради троттлинга бесплатного тарифа такого масштаба.
 const deviceQuota = new Map<string, QuotaEntry>();
 const ipQuota = new Map<string, QuotaEntry>();
 
@@ -148,10 +149,10 @@ async function callDeepSeek(systemPrompt: string, userPrompt: string, maxTokens:
 const app = express();
 app.use(cors());
 
-// Logs every request as it arrives (before body parsing, so it fires even
-// if the client aborts/times out before the body finishes) and again on
-// completion with status+duration - lets us see from the Amvera log
-// whether a request from the app ever reached the process at all.
+// Логирует каждый запрос по факту прихода (до парсинга тела, поэтому
+// срабатывает, даже если клиент оборвал/затаймаутил до конца тела) и ещё раз
+// по завершении со статусом и длительностью — по логу Amvera можно понять,
+// доходил ли вообще запрос от приложения до процесса.
 app.use((req, res, next) => {
   const start = Date.now();
   console.log(`[req] ${req.method} ${req.path} from ${req.ip}`);

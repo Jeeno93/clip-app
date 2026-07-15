@@ -170,10 +170,10 @@ function generateId(): string {
   return Date.now().toString() + Math.random().toString(36).substr(2, 9);
 }
 
-// Anonymous per-install identifier — only used to bucket the server-side
-// free AI-analysis quota, not tied to any personal data. Resettable by
-// reinstalling, which is an acceptable/low-value abuse path at this scale
-// (see clip-app-api's daily per-device + per-IP limits).
+// Анонимный идентификатор установки — используется только для учёта
+// бесплатной квоты AI-анализа на сервере, с личными данными не связан.
+// Сбрасывается переустановкой — это допустимый малоценный способ обхода
+// при таком масштабе (см. дневные лимиты на device/IP в clip-app-api).
 export async function getOrCreateDeviceId(): Promise<string> {
   const existing = await AsyncStorage.getItem(DEVICE_ID_KEY);
   if (existing) return existing;
