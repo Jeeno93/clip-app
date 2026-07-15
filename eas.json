@@ -9,11 +9,17 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_CLIP_API_URL": "https://clip-api-almazkin93.amvera.io"
+      }
     },
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_CLIP_API_URL": "https://clip-api-almazkin93.amvera.io"
       }
     }
   },
