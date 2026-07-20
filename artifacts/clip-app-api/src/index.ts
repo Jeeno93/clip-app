@@ -130,7 +130,9 @@ async function callDeepSeek(systemPrompt: string, userPrompt: string, maxTokens:
       Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
     },
     body: JSON.stringify({
-      model: "deepseek-chat",
+      // deepseek-chat депрекейтится 24.07.2026 — v4-flash в non-thinking
+      // режиме (по умолчанию, без параметра thinking) это прямая замена.
+      model: "deepseek-v4-flash",
       max_tokens: maxTokens,
       messages: [
         { role: "system", content: systemPrompt },
