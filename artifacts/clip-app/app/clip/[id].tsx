@@ -261,12 +261,13 @@ export default function ClipDetailScreen() {
   const hasAnalysisInput = buildAnalysisInput().trim().length > 0;
   const hasAnalyzableContent =
     hasAnalysisInput && (!!clip.linkPreview || clip.text.length > 200);
-  // true, только когда настройки уже загрузились и все ключи провайдеров пустые.
-  const noKeyConfigured =
-    aiSettings !== null &&
-    !Object.values(aiSettings.aiKeys).some(
-      (v) => typeof v === "string" && v.trim().length > 0
-    );
+  // true, когда у ВЫБРАННОГО СЕЙЧАС провайдера нет ключа — не когда ключей
+  // нет вообще ни у кого. Раньше здесь проверялись все провайдеры разом
+  // (Object.values(aiKeys).some(...)), из-за чего сохранённый когда-то ключ
+  // для одного провайдера (например DeepSeek) прятал кнопку анализа целиком
+  // при переключении на другого провайдера без ключа (Gemini/Claude) — ни
+  // бесплатный путь, ни CTA «настроить ключ» не показывались вообще.
+  const noKeyConfigured = aiSettings !== null && !currentApiKey;
 
   // freeRemaining равен null, пока опрос квоты не завершился — в том числе
   // если он упал по таймауту (см. getProxyQuotaRemaining). Если трактовать
