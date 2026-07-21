@@ -405,6 +405,7 @@ export default function HomeScreen() {
             style={s.settingsBtn}
             onPress={() => router.push("/settings")}
             hitSlop={8}
+            accessibilityLabel="Настройки"
           >
             <Feather name="settings" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
@@ -491,6 +492,7 @@ export default function HomeScreen() {
         style={s.fab}
         onPress={() => router.push("/add")}
         activeOpacity={0.85}
+        accessibilityLabel="Добавить идею"
       >
         <Feather name="plus" size={24} color={colors.primaryForeground} />
       </TouchableOpacity>
